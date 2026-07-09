@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink-950 text-slate-100 antialiased;
+}
+
+::selection {
+  @apply bg-mint-500/30 text-white;
+}
+
+.card {
+  @apply rounded-2xl border border-white/10 bg-ink-900/60 p-5 sm:p-6 shadow-glow backdrop-blur;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-xl bg-mint-500 px-4 py-2.5
+    text-sm font-semibold text-ink-950 transition hover:bg-mint-400
+    disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-xl border border-white/15
+    bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-100 transition
+    hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+.input {
+  @apply w-full rounded-xl border border-white/10 bg-ink-800/60 px-3.5 py-2.5 text-sm
+    text-slate-100 placeholder:text-slate-500 outline-none transition
+    focus:border-mint-500/60 focus:ring-2 focus:ring-mint-500/20;
+}
+
+.select {
+  @apply w-full rounded-xl border border-white/10 bg-ink-800/60 px-3.5 py-2.5 text-sm
+    text-slate-100 outline-none transition focus:border-mint-500/60 focus:ring-2 focus:ring-mint-500/20;
+}
+
+.label {
+  @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400;
+}
+
+.pill {
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+}
+
+.stat {
+  @apply rounded-xl border border-white/10 bg-ink-800/40 p-4;
+}
