@@ -24,11 +24,22 @@ export type PoolState = {
 
 export async function getPolicy(policyId: number): Promise<Policy> {
   const client = getReadClient();
-  return client.readContract({
+  const raw = (await client.readContract({
     address: CONTRACT_ADDRESS,
     functionName: "get_policy",
     args: [policyId],
-  }) as Promise<Policy>;
+  })) as Record<string, unknown>;
+
+  return {
+    buyer: raw.buyer as string,
+    coin_id: raw.coin_id as string,
+    threshold_bps: Number(raw.threshold_bps),
+    payout_amount: BigInt(raw.payout_amount as any),
+    premium_paid: BigInt(raw.premium_paid as any),
+    start_day: Number(raw.start_day),
+    duration_days: Number(raw.duration_days),
+    status: raw.status as Policy["status"],
+  };
 }
 
 export async function getPolicyCount(): Promise<number> {
@@ -43,20 +54,31 @@ export async function getPolicyCount(): Promise<number> {
 
 export async function getPoolState(): Promise<PoolState> {
   const client = getReadClient();
-  return client.readContract({
+  const raw = (await client.readContract({
     address: CONTRACT_ADDRESS,
     functionName: "get_pool_state",
     args: [],
-  }) as Promise<PoolState>;
+  })) as Record<string, unknown>;
+
+  // readContract's runtime values aren't guaranteed to already be
+  // BigInt just because we type them that way — coerce explicitly so
+  // downstream arithmetic never silently mixes BigInt and Number.
+  return {
+    pool_balance: BigInt(raw.pool_balance as any),
+    reserved: BigInt(raw.reserved as any),
+    available: BigInt(raw.available as any),
+    total_shares: BigInt(raw.total_shares as any),
+  };
 }
 
 export async function getAvailableCapacity(): Promise<bigint> {
   const client = getReadClient();
-  return client.readContract({
+  const raw = await client.readContract({
     address: CONTRACT_ADDRESS,
     functionName: "get_available_capacity",
     args: [],
-  }) as Promise<bigint>;
+  });
+  return BigInt(raw as any);
 }
 
 // ---------------- writes ----------------
