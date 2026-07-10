@@ -21,7 +21,13 @@ function readLog(): ActivityEntry[] {
 
 function writeLog(entries: ActivityEntry[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES)));
+  const serializable = entries.slice(0, MAX_ENTRIES);
+  window.localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(serializable, (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value
+    )
+  );
   window.dispatchEvent(new Event("sepadan:activity-updated"));
 }
 
