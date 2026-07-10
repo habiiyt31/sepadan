@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getPoolState, type PoolState } from "@/lib/contract";
 import { PoolStats } from "@/components/PoolStats";
+import { ActivityFeed } from "@/components/ActivityFeed";
 
 export default function HomePage() {
   const [pool, setPool] = useState<PoolState | null>(null);
@@ -54,11 +55,16 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="card">
+        <h2 className="mb-3 text-sm font-semibold text-slate-300">Recent activity</h2>
+        <ActivityFeed />
+      </section>
+
       <Link
-        href="/policy/0"
+        href="/policies"
         className="block rounded-xl border border-white/10 bg-ink-800/40 px-3.5 py-2.5 text-center text-sm text-slate-400 transition hover:border-mint-500/40 hover:text-mint-400"
       >
-        Browse policy #0 →
+        Browse all policies →
       </Link>
     </div>
   );

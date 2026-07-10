@@ -1,5 +1,6 @@
 import { TransactionStatus } from "genlayer-js/types";
 import { CONTRACT_ADDRESS, getReadClient, ensureCorrectNetwork } from "./genlayer";
+import { logActivity, explorerTxUrl } from "./activityLog";
 
 export type Policy = {
   buyer: string;
@@ -28,6 +29,16 @@ export async function getPolicy(policyId: number): Promise<Policy> {
     functionName: "get_policy",
     args: [policyId],
   }) as Promise<Policy>;
+}
+
+export async function getPolicyCount(): Promise<number> {
+  const client = getReadClient();
+  const count = await client.readContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "get_policy_count",
+    args: [],
+  });
+  return Number(count);
 }
 
 export async function getPoolState(): Promise<PoolState> {
@@ -65,11 +76,28 @@ async function writeAndWait(
     args,
     value,
   });
-  const receipt = await client.waitForTransactionReceipt({
-    hash,
-    status: TransactionStatus.FINALIZED,
-  });
-  return { hash, receipt };
+
+  logActivity({ hash, functionName, args, status: "pending", timestamp: Date.now() });
+
+  try {
+    const receipt = await client.waitForTransactionReceipt({
+      hash,
+      status: TransactionStatus.FINALIZED,
+      retries: 120,
+      interval: 3000,
+    });
+    logActivity({ hash, functionName, args, status: "finalized", timestamp: Date.now() });
+    return { hash, receipt };
+  } catch (err: any) {
+    // Consensus can take longer than our wait window even though the
+    // transaction is still progressing normally — don't treat this as
+    // a failure, just hand back the hash so the caller can point the
+    // user at the Explorer instead of showing a scary error.
+    logActivity({ hash, functionName, args, status: "pending-long", timestamp: Date.now() });
+    throw new Error(
+      `Still finalizing on-chain (this can take longer than usual). Check the transaction directly: ${explorerTxUrl(hash)}`
+    );
+  }
 }
 
 export async function deposit(walletAddress: `0x${string}`, amountWei: bigint) {

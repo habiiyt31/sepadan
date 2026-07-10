@@ -28,17 +28,19 @@ consensus.
 
 ### Step 0 — what you're looking at
 
-Three pages, three actions:
+Four pages:
 
 | Page | What it does |
 |---|---|
+| `/` | Home — pool stats and a live feed of recent transactions from this browser |
 | `/underwrite` | Put GEN into the shared pool, get shares back |
 | `/policy/new` | Buy a policy: pick a coin, a depeg threshold, a payout amount |
-| `/policy/[id]` | Trigger the actual price check that decides payout vs. expiry |
+| `/policies` | Browse every policy that's been created, click into any of them |
+| `/policy/[id]` | One policy's detail — trigger the price check, see its own history |
 
-The point of the project is the third one — that's where GenLayer
-validators independently fetch a live price and have to agree before
-anything pays out.
+The core of the project is `/policy/[id]`'s **"Check for depeg now"**
+button — that's where GenLayer validators independently fetch a live
+price and have to agree before anything pays out.
 
 ### Step 1 — connect a wallet
 
@@ -56,7 +58,10 @@ anything pays out.
 1. Go to **Underwrite**.
 2. Deposit a small amount, e.g. `5` GEN, and confirm in MetaMask.
 3. This takes a few seconds because 5 validators need to agree on the
-   transaction, not just one node.
+   transaction, not just one node. Consensus on Studionet can
+   occasionally take longer than expected — the app now waits up to
+   ~6 minutes before giving up, and if it does time out it points you
+   at the Explorer link rather than just failing silently.
 4. Once confirmed, the pool stats update: **Total pool**, **Reserved**,
    **Available capacity**, **Total shares**.
 
@@ -67,6 +72,9 @@ anything pays out.
    smaller than what you deposited (e.g. `1` GEN), a duration
    (e.g. `1` day), and a premium (e.g. `0.05` GEN).
 3. Submit — you'll land on `/policy/<id>` once confirmed.
+4. Repeat this a couple of times with different coins/thresholds, then
+   check **Policies** in the nav — every policy you created shows up
+   there, not just the first one.
 
 ### Step 4 — trigger the price check (the actual demo moment)
 
@@ -79,7 +87,12 @@ anything pays out.
    Each of the 5 validators independently called CoinGecko's public
    price API during this step — that's the "oracle" part happening
    on-chain, not in the frontend.
-4. Since real stablecoins are almost always stable, the result will
+4. Back in the app, scroll down on the policy page to **"History for
+   this policy"** — every `check_depeg` call you've made against it
+   shows up there with its status and a direct Explorer link, without
+   needing to leave the app or dig through the Explorer's global
+   transaction list.
+5. Since real stablecoins are almost always stable, the result will
    normally be `active` (no depeg) or, after the duration passes,
    `expired`. To see the `claimed` payout path without waiting for a
    real depeg, see below.
@@ -95,6 +108,11 @@ anything pays out.
   contract itself decided.
 - Wallet connect/disconnect is predictable — disconnecting doesn't
   silently reconnect on refresh.
+- Every policy you create is visible and selectable from `/policies` —
+  nothing is hardcoded to a single ID.
+- The **Recent activity** panel on the home page and the per-policy
+  history section update live as transactions finalize, each linking
+  straight to its Explorer page.
 
 ### Testing the payout (claimed) path
 
@@ -121,12 +139,14 @@ sepadan/
 │   └── test_sepadan.py      # gltest integration tests
 ├── frontend/                  # Next.js 15 app (App Router, TypeScript, Tailwind)
 │   ├── app/
-│   │   ├── page.tsx                  # Home / live pool stats
+│   │   ├── page.tsx                  # Home / live pool stats / recent activity
 │   │   ├── underwrite/page.tsx       # Deposit / withdraw
 │   │   ├── policy/new/page.tsx       # Buy cover
-│   │   └── policy/[id]/page.tsx      # Policy detail + trigger price check
-│   ├── components/          # NavBar, StatusPill, PoolStats
-│   ├── lib/                 # genlayer.ts (client), contract.ts (typed calls), useWallet.ts
+│   │   ├── policies/page.tsx         # Browse every policy
+│   │   └── policy/[id]/page.tsx      # Policy detail + trigger price check + its history
+│   ├── components/          # NavBar, StatusPill, PoolStats, ActivityFeed
+│   ├── lib/                 # genlayer.ts (client), contract.ts (typed calls),
+│   │                        # useWallet.ts, activityLog.ts (local tx history)
 │   └── .env.example
 ├── genlayer.config.json     # Network definitions (Studionet + Testnet Bradbury)
 └── package.json
@@ -208,6 +228,18 @@ Runs `deploy/deployScript.ts` against your selected network and prints
 the deployed address. Copy it into `frontend/.env` as
 `NEXT_PUBLIC_CONTRACT_ADDRESS`.
 
+> **Redeploying after a contract change?** Because `contracts/sepadan.py`
+> never populates `upgraders`, GenVM permanently locks its code the
+> instant `__init__` finishes running (see
+> [Non-upgradability](#non-upgradability)). Any edit to the `.py` file —
+> even adding a single read-only view function — means the previously
+> deployed address is now running different code than what's in this
+> repo. There is no in-place upgrade path. Deploying again gets you a
+> **new contract address** with a **fresh, empty pool** — any policies
+> or deposits made against the old address stay there, inaccessible
+> from the new one. Update `NEXT_PUBLIC_CONTRACT_ADDRESS` in
+> `frontend/.env` to the new address afterward.
+
 ### 6. Run the frontend
 
 ```bash
@@ -254,6 +286,16 @@ demand, which is why the manual low-threshold workaround under
   references — passing them to `gl.storage.copy_to_memory()` throws
   `AssertionError: assert td is not None`. Fields used inside a
   non-deterministic block are wrapped with `str()`/`int()` instead.
+- **`get_policy_count()` exists purely so the frontend can list every
+  policy** — without it, the UI had no way to discover how many
+  policies exist besides guessing IDs, which meant a second buyer's
+  policy was effectively invisible in the app.
+- **The activity log is local, not on-chain.** `frontend/lib/activityLog.ts`
+  keeps a browser-side record (via `localStorage`) of every
+  transaction this browser has submitted, purely so the UI has
+  something to show without needing a separate indexing service. It's
+  a convenience layer, not a source of truth — the Explorer link next
+  to every entry is the source of truth.
 
 ## Non-upgradability
 
@@ -261,7 +303,9 @@ demand, which is why the manual low-threshold workaround under
 `__init__`. GenVM automatically calls `root.lock_default()` right after
 `__init__` returns, permanently locking the code slot. There is no
 admin function and no override anywhere in the contract. Run
-`genvm-lint` and the `gltest` suite before you deploy, not after.
+`genvm-lint` and the `gltest` suite before you deploy, not after — and
+expect to redeploy to a new address for every contract change, since
+there is no upgrade path by design.
 
 ## License
 

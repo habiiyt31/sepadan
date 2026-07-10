@@ -246,6 +246,10 @@ class Sepadan(gl.Contract):
         return self.policies[policy_id]
 
     @gl.public.view
+    def get_policy_count(self) -> u32:
+        return self.next_policy_id
+
+    @gl.public.view
     def get_pool_state(self) -> dict:
         return {
             "pool_balance": self.pool_balance,

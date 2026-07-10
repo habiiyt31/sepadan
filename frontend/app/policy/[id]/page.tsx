@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useWallet } from "@/lib/useWallet";
 import { getPolicy, checkDepeg, currentDayCounter, formatGen, type Policy } from "@/lib/contract";
 import { StatusPill } from "@/components/StatusPill";
+import { ActivityFeed } from "@/components/ActivityFeed";
 
 export default function PolicyDetailPage() {
   const params = useParams<{ id: string }>();
@@ -122,6 +123,13 @@ export default function PolicyDetailPage() {
             Window passed, no depeg. Capital released back to underwriters.
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <h2 className="mb-3 text-sm font-semibold text-slate-300">History for this policy</h2>
+        <ActivityFeed
+          filterFn={(e) => e.functionName === "check_depeg" && Number(e.args[0]) === policyId}
+        />
       </div>
     </div>
   );

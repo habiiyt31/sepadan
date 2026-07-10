@@ -42,8 +42,8 @@ export default function NewPolicyPage() {
       router.push(`/policy/${Number(newId)}`);
     } catch (err: any) {
       setError(
-        err?.message ??
-          "Failed to create policy — the pool may not have enough unreserved capacity for this payout amount."
+        (err?.message ?? "Failed to create policy") +
+          " — check /policies in a moment, it may have gone through anyway."
       );
     } finally {
       setBusy(false);

@@ -37,6 +37,7 @@ export function NavBar() {
         </Link>
 
         <nav className="hidden items-center gap-5 text-sm font-medium text-slate-300 sm:flex">
+          <Link href="/policies" className="hover:text-white">Policies</Link>
           <Link href="/underwrite" className="hover:text-white">Underwrite</Link>
           <Link href="/policy/new" className="hover:text-white">Buy cover</Link>
         </nav>
@@ -78,6 +79,7 @@ export function NavBar() {
         </div>
       )}
       <div className="mx-auto flex max-w-5xl items-center gap-5 px-4 pb-3 text-sm font-medium text-slate-300 sm:hidden sm:px-6">
+        <Link href="/policies" className="hover:text-white">Policies</Link>
         <Link href="/underwrite" className="hover:text-white">Underwrite</Link>
         <Link href="/policy/new" className="hover:text-white">Buy cover</Link>
       </div>
