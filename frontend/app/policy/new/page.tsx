@@ -55,8 +55,7 @@ export default function NewPolicyPage() {
       <div>
         <h1 className="text-2xl font-bold">Buy depeg cover</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Payout triggers automatically if validators confirm the price
-          breached your threshold — read straight from CoinGecko.
+          Payout triggers if validators confirm the price broke your threshold.
         </p>
       </div>
 
@@ -135,8 +134,7 @@ export default function NewPolicyPage() {
             required
           />
           <p className="mt-1.5 text-xs text-slate-500">
-            Paid to the underwriting pool immediately, whether or not a
-            depeg happens — this is what funds payouts for everyone.
+            Paid to the pool now, whether or not a depeg happens.
           </p>
         </div>
 

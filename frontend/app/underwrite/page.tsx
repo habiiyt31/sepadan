@@ -79,8 +79,7 @@ export default function UnderwritePage() {
       <div>
         <h1 className="text-2xl font-bold">Underwrite the pool</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Deposit GEN to earn a share of every policy premium. You can only
-          withdraw the portion not currently backing active policies.
+          Deposit GEN, earn shares. Withdraw anytime the pool isn't reserving your capital.
         </p>
       </div>
 
@@ -130,8 +129,7 @@ export default function UnderwritePage() {
               required
             />
             <p className="mt-1.5 text-xs text-slate-500">
-              Shares were minted 1:1 with GEN at your deposit time (before
-              pool growth from premiums).
+              Minted 1:1 with GEN at deposit time.
             </p>
           </div>
           <button

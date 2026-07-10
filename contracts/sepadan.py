@@ -198,7 +198,7 @@ class Sepadan(gl.Contract):
         if policy.status != "active":
             raise gl.vm.UserError("policy is not active")
 
-        coin_id = gl.storage.copy_to_memory(policy.coin_id)
+        coin_id = str(policy.coin_id)
         threshold_bps = int(policy.threshold_bps)
 
         def leader_fn() -> str:

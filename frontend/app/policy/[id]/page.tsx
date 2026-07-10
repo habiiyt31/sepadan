@@ -96,16 +96,11 @@ export default function PolicyDetailPage() {
 
         {policy.status === "active" && (
           <div className="space-y-3 rounded-xl border border-peg-500/20 bg-peg-500/5 p-4">
-            <p className="text-sm text-slate-300">
-              Anyone can trigger a check — validators fetch the live price
-              themselves, so there's nothing to gain by calling it early
-              or often.
-            </p>
             {error && <p className="text-sm text-danger-400">{error}</p>}
             {lastResult && (
               <p className="text-sm text-peg-400">
                 Result: <strong>{lastResult}</strong>
-                {lastResult === "active" && " — no depeg detected yet, still covered."}
+                {lastResult === "active" && " — no depeg yet, still covered."}
               </p>
             )}
             <button onClick={handleCheck} disabled={checking} className="btn-primary w-full">
@@ -118,14 +113,13 @@ export default function PolicyDetailPage() {
 
         {policy.status === "claimed" && (
           <div className="rounded-xl border border-mint-500/20 bg-mint-500/5 p-4 text-sm text-mint-400">
-            ✓ Depeg confirmed by validator consensus — payout released to buyer.
+            ✓ Depeg confirmed by validators — payout released.
           </div>
         )}
 
         {policy.status === "expired" && (
           <div className="rounded-xl border border-white/10 bg-ink-800/40 p-4 text-sm text-slate-400">
-            Policy window passed without a qualifying depeg. Reserved
-            capital was released back to underwriters.
+            Window passed, no depeg. Capital released back to underwriters.
           </div>
         )}
       </div>
