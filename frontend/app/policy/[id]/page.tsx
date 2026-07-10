@@ -39,10 +39,10 @@ export default function PolicyDetailPage() {
     setError(null);
     setLastResult(null);
     try {
-      const { receipt } = await checkDepeg(address, policyId, currentDayCounter());
-      const status = receipt?.data?.return_data;
-      setLastResult(String(status));
-      await load();
+      await checkDepeg(address, policyId, currentDayCounter());
+      const fresh = await getPolicy(policyId);
+      setPolicy(fresh);
+      setLastResult(fresh.status);
     } catch (err: any) {
       setError(err?.message ?? "Check failed");
     } finally {

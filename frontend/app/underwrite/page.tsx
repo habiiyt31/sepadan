@@ -59,9 +59,15 @@ export default function UnderwritePage() {
     setSuccess(null);
     try {
       const shares = genToWei(withdrawShares);
-      const { receipt } = await withdraw(address, shares);
-      const amount = receipt?.data?.return_data;
-      setSuccess(`Withdrew ${formatGen(BigInt(amount ?? 0))} GEN.`);
+      // Same formula the contract uses — computed here just to show a
+      // meaningful success message; the contract's own math is what
+      // actually executes and is the source of truth.
+      const estimate =
+        pool && pool.total_shares > BigInt(0)
+          ? (shares * pool.pool_balance) / pool.total_shares
+          : BigInt(0);
+      await withdraw(address, shares);
+      setSuccess(`Withdrew ~${formatGen(estimate)} GEN.`);
       setWithdrawShares("");
       await load();
     } catch (err: any) {

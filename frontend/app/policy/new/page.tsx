@@ -7,6 +7,7 @@ import {
   createPolicy,
   currentDayCounter,
   genToWei,
+  getPolicyCount,
   SUPPORTED_COINS,
 } from "@/lib/contract";
 
@@ -28,8 +29,9 @@ export default function NewPolicyPage() {
     setBusy(true);
     setError(null);
     try {
+      const idBeforeCreate = await getPolicyCount(); // sequential 0-indexed IDs
       const thresholdBps = Math.round(parseFloat(thresholdPct) * 100);
-      const { receipt } = await createPolicy(
+      await createPolicy(
         address,
         coinId,
         thresholdBps,
@@ -38,8 +40,7 @@ export default function NewPolicyPage() {
         currentDayCounter(),
         genToWei(premiumGen)
       );
-      const newId = receipt?.data?.return_data ?? 0;
-      router.push(`/policy/${Number(newId)}`);
+      router.push(`/policy/${idBeforeCreate}`);
     } catch (err: any) {
       setError(
         (err?.message ?? "Failed to create policy") +
