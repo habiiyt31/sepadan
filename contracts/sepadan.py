@@ -41,6 +41,23 @@ import json
 import typing
 
 
+# Sending GEN to a regular wallet (EOA) is different from sending to
+# another Intelligent Contract. gl.get_contract_at(...).emit_transfer()
+# is for IC-to-IC transfers only. An EOA recipient must go through this
+# EVM contract interface instead -- using get_contract_at() for an EOA
+# looks like it works at the outer call level but the actual value
+# transfer (a child message) fails at execution time. See "Value
+# Transfers > Sending Value to an EOA or EVM Contract" in the GenLayer
+# docs.
+@gl.evm.contract_interface
+class _Wallet:
+    class View:
+        pass
+
+    class Write:
+        pass
+
+
 # Prices are handled as integer "micros" (1.0 USD == 1_000_000) to avoid
 # floating point non-determinism across validators.
 USD_MICROS = 1_000_000
@@ -134,7 +151,7 @@ class Sepadan(gl.Contract):
         self.total_shares = u256(int(self.total_shares) - int(shares_to_burn))
         self.pool_balance = u256(int(self.pool_balance) - int(amount))
 
-        gl.get_contract_at(holder).emit_transfer(value=amount, on="finalized")
+        _Wallet(holder).emit_transfer(value=amount)
         return amount
 
     @gl.public.view
@@ -225,9 +242,7 @@ class Sepadan(gl.Contract):
             # Depeg confirmed by independently-fetched market data.
             self.reserved = u256(int(self.reserved) - int(policy.payout_amount))
             self.pool_balance = u256(int(self.pool_balance) - int(policy.payout_amount))
-            gl.get_contract_at(policy.buyer).emit_transfer(
-                value=policy.payout_amount, on="finalized"
-            )
+            _Wallet(policy.buyer).emit_transfer(value=policy.payout_amount)
             policy.status = "claimed"
             return "claimed"
 
