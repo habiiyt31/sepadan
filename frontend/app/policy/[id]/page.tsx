@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useWallet } from "@/lib/useWallet";
-import { getPolicy, checkDepeg, currentDayCounter, formatGen, type Policy } from "@/lib/contract";
+import {
+  getPolicy,
+  checkDepeg,
+  resolveCooling,
+  requestManualReview,
+  currentDayCounter,
+  formatGen,
+  type Policy,
+} from "@/lib/contract";
 import { StatusPill } from "@/components/StatusPill";
 import { ActivityFeed } from "@/components/ActivityFeed";
 
@@ -45,6 +53,38 @@ export default function PolicyDetailPage() {
       setLastResult(fresh.status);
     } catch (err: any) {
       setError(err?.message ?? "Check failed");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function handleResolveCooling() {
+    if (!address) return connect();
+    setChecking(true);
+    setError(null);
+    setLastResult(null);
+    try {
+      await resolveCooling(address, policyId, currentDayCounter());
+      const fresh = await getPolicy(policyId);
+      setPolicy(fresh);
+      setLastResult(fresh.status);
+    } catch (err: any) {
+      setError(err?.message ?? "Resolving the cooling period failed");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function handleManualReview() {
+    if (!address) return connect();
+    setChecking(true);
+    setError(null);
+    try {
+      await requestManualReview(address, policyId);
+      const fresh = await getPolicy(policyId);
+      setPolicy(fresh);
+    } catch (err: any) {
+      setError(err?.message ?? "Manual review request failed");
     } finally {
       setChecking(false);
     }
@@ -94,6 +134,41 @@ export default function PolicyDetailPage() {
         <div className="truncate text-xs text-slate-500">
           Buyer: <span className="font-mono text-slate-400">{policy.buyer}</span>
         </div>
+
+        {policy.classification && (
+          <div className="rounded-xl border border-white/10 bg-ink-800/40 p-4 text-sm">
+            <p className="text-xs text-slate-500">AI classification</p>
+            <p className="font-semibold">{policy.classification}</p>
+            {policy.resolved_note && (
+              <p className="mt-1 text-xs text-slate-400">{policy.resolved_note}</p>
+            )}
+          </div>
+        )}
+
+        {policy.status === "active" && policy.consecutive_fetch_failures >= 3 && (
+          <div className="rounded-xl border border-warn-400/20 bg-warn-400/5 p-4 text-sm text-warn-400">
+            <p className="mb-2">
+              {policy.consecutive_fetch_failures} consecutive price-fetch failures — the price
+              feed may be down.
+            </p>
+            <button onClick={handleManualReview} disabled={checking} className="btn-secondary w-full">
+              Request manual review (extends coverage window)
+            </button>
+          </div>
+        )}
+
+        {policy.status === "cooling" && (
+          <div className="space-y-3 rounded-xl border border-warn-400/20 bg-warn-400/5 p-4">
+            <p className="text-sm text-slate-300">
+              Classified as possible manipulation — waiting until day{" "}
+              {policy.cooling_until_day} before a second look.
+            </p>
+            {error && <p className="text-sm text-danger-400">{error}</p>}
+            <button onClick={handleResolveCooling} disabled={checking} className="btn-primary w-full">
+              {checking ? "Checking…" : "Resolve cooling period"}
+            </button>
+          </div>
+        )}
 
         {policy.status === "active" && (
           <div className="space-y-3 rounded-xl border border-peg-500/20 bg-peg-500/5 p-4">

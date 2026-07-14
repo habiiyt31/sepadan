@@ -10,7 +10,12 @@ export type Policy = {
   premium_paid: bigint;
   start_day: number;
   duration_days: number;
-  status: "active" | "claimed" | "expired";
+  status: "active" | "claimed" | "expired" | "cooling";
+  classification: "" | "STRUCTURAL_FAILURE" | "TRANSIENT_VOLATILITY" | "MANIPULATION_SUSPECTED";
+  resolved_note: string;
+  consecutive_fetch_failures: number;
+  cooling_until_day: number;
+  manual_reviews_requested: number;
 };
 
 export type PoolState = {
@@ -39,6 +44,11 @@ export async function getPolicy(policyId: number): Promise<Policy> {
     start_day: Number(raw.start_day),
     duration_days: Number(raw.duration_days),
     status: raw.status as Policy["status"],
+    classification: (raw.classification as Policy["classification"]) ?? "",
+    resolved_note: (raw.resolved_note as string) ?? "",
+    consecutive_fetch_failures: Number(raw.consecutive_fetch_failures ?? 0),
+    cooling_until_day: Number(raw.cooling_until_day ?? 0),
+    manual_reviews_requested: Number(raw.manual_reviews_requested ?? 0),
   };
 }
 
@@ -153,6 +163,21 @@ export async function checkDepeg(
   currentDay: number
 ) {
   return writeAndWait(walletAddress, "check_depeg", [policyId, currentDay]);
+}
+
+export async function resolveCooling(
+  walletAddress: `0x${string}`,
+  policyId: number,
+  currentDay: number
+) {
+  return writeAndWait(walletAddress, "resolve_cooling", [policyId, currentDay]);
+}
+
+export async function requestManualReview(
+  walletAddress: `0x${string}`,
+  policyId: number
+) {
+  return writeAndWait(walletAddress, "request_manual_review", [policyId]);
 }
 
 // ---------------- helpers ----------------
