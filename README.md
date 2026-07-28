@@ -58,9 +58,7 @@ outright:
   attaches to it.
 
 See `_validate_price_payload` and `_validate_classification_payload`
-in `contracts/sepadan.py` for the full rule set, and
-`test/test_sepadan_validators.py` for combinations that must be
-accepted and rejected.
+in `contracts/sepadan.py` for the full rule set.
 
 ## Fetch failures don't crash or silently misprice
 
@@ -74,28 +72,30 @@ extension — there's no privileged admin who could otherwise intervene
 (see Non-upgradability below), so this is a permissionless,
 buyer-triggered safety valve rather than a human review queue.
 
+Expiry is checked independently of whether the price fetch succeeds —
+a policy whose duration has passed will resolve to `expired` (and
+release its reserved capital) the next time anyone calls
+`check_depeg`, even if the price feed happens to be unreachable at
+that moment. It won't stay stuck `active` forever waiting for a
+`RELIABLE` fetch that may never come.
+
 ## Project structure
 
 ```
 sepadan/
 ├── contracts/
-│   └── sepadan.py                     # The Intelligent Contract (non-upgradable)
-├── deploy/
-│   └── deployScript.ts                # export default main(client) — run via `genlayer deploy`
-├── test/
-│   ├── test_sepadan_validators.py     # offline pytest — payload validator logic
-│   └── test_sepadan_integration.py    # gltest — full lifecycle against a live network
-├── frontend/                          # Next.js 15 app (App Router, TypeScript, Tailwind)
+│   └── sepadan.py          # The Intelligent Contract (non-upgradable)
+├── frontend/                 # Next.js 15 app (App Router, TypeScript, Tailwind)
 │   ├── app/
-│   │   ├── page.tsx                   # Home / live pool stats
-│   │   ├── underwrite/page.tsx        # Deposit / withdraw
-│   │   ├── policy/new/page.tsx        # Buy cover
-│   │   ├── policies/page.tsx          # Browse every policy
-│   │   └── policy/[id]/page.tsx       # Policy detail + trigger checks + history
-│   ├── components/                    # NavBar, StatusPill, PoolStats, ActivityFeed
-│   ├── lib/                           # genlayer.ts, contract.ts, useWallet.ts, activityLog.ts
+│   │   ├── page.tsx                  # Home / live pool stats
+│   │   ├── underwrite/page.tsx       # Deposit / withdraw
+│   │   ├── policy/new/page.tsx       # Buy cover
+│   │   ├── policies/page.tsx         # Browse every policy
+│   │   └── policy/[id]/page.tsx      # Policy detail, checks, history
+│   ├── components/          # NavBar, StatusPill, PoolStats, ActivityFeed
+│   ├── lib/                 # genlayer.ts, contract.ts, useWallet.ts, activityLog.ts
 │   └── .env.example
-├── genlayer.config.json               # Network definitions (Studionet + Testnet Bradbury)
+├── genlayer.config.json     # Network definitions (Studionet + Testnet Bradbury)
 └── package.json
 ```
 
@@ -131,8 +131,7 @@ set `NEXT_PUBLIC_GENLAYER_NETWORK=testnetBradbury` in `frontend/.env`:
 npm install -g genlayer
 py -3.12 -m pip install genvm-linter
 
-# 2. Dependencies
-npm install
+# 2. Frontend dependencies
 cd frontend && npm install && cd ..
 
 # 3. Network
@@ -141,62 +140,118 @@ genlayer network   # choose studionet (fund via the 💧 faucet) or testnetBradb
 # 4. Lint — non-upgradable, so this matters more than usual
 genvm-lint check contracts/sepadan.py
 
-# 5. Deploy
-genlayer deploy
-# copy the printed address into frontend/.env as NEXT_PUBLIC_CONTRACT_ADDRESS
+# 5. Deploy directly from the CLI (no deploy script)
+genlayer deploy --contract contracts/sepadan.py
 
-# 6. Frontend
-cd frontend && cp .env.example .env && npm run dev
+# 6. Copy the printed contract address into frontend/.env
+cd frontend && cp .env.example .env
+# paste the address as NEXT_PUBLIC_CONTRACT_ADDRESS, then:
+npm run dev
 ```
+
+Sepadan's constructor (`__init__`) takes no arguments — every
+parameter that matters (thresholds, tolerances, cooling/grace periods)
+is a module-level constant in `contracts/sepadan.py`, checked at
+write-time rather than passed in at deploy time.
 
 > **Redeploying after any contract change?** `upgraders` is never
 > populated in `__init__`, so GenVM permanently locks the code slot the
 > instant `__init__` finishes running. There is no in-place upgrade
-> path — every contract edit needs a fresh `genlayer deploy` to a new
-> address, and the old address's pool/policies are left behind,
-> inaccessible from the new one.
+> path — every contract edit needs a fresh deploy to a new address, and
+> the old address's pool/policies are left behind, inaccessible from
+> the new one.
 
 ## Testing
 
-```bash
-# Fast, offline — validator schema/business-rule logic
-pytest test/test_sepadan_validators.py -v
+There's no separate test suite in this repo — verification happens in
+two places:
 
-# Full lifecycle against a live network
-gltest --network studionet test/test_sepadan_integration.py
-```
+**`genvm-lint check contracts/sepadan.py`** before every deploy. Since
+the contract can't be patched afterward, this is the primary
+correctness gate.
 
-`test_sepadan_validators.py` deliberately duplicates
-`_validate_price_payload` and `_validate_classification_payload` from
-the contract rather than importing it — `contracts/sepadan.py` starts
-with `from genlayer import *`, which pulls in GenVM-only symbols
-(`u256`, `gl`, `TreeMap`, ...) that don't exist outside the sandboxed
-GenVM runtime. Splitting the validators into a separate importable
-module would fix that but would also break `genlayer deploy`, which
-reads the contract as a single file. The tradeoff is documented in
-both files: keep the two copies in sync by hand if the validators
-change.
+**Manual QA against the deployed app**, in this order:
+
+1. **Connect / disconnect wallet** — connect, confirm the address
+   shows in the navbar, disconnect, refresh, confirm it stays
+   disconnected (doesn't silently reconnect).
+2. **Underwrite** — deposit GEN, confirm pool stats update; withdraw a
+   portion, confirm your MetaMask balance actually increases (not
+   just the on-page pool numbers — this is the step that broke before
+   the `_Wallet` EOA-transfer fix, worth checking every time).
+3. **Buy cover** — create a policy, confirm it redirects to the
+   correct new policy ID, confirm it shows up in `/policies`.
+4. **Check for depeg** — trigger a check, open the transaction in the
+   [GenLayer Explorer](https://explorer-studio.genlayer.com/), confirm
+   `Initial Validators: 5` and a `RELIABLE`/`STALE` `data_quality` under
+   Equivalence Principle Outputs.
+5. **If a real breach happens** (e.g. testing with a very tight
+   threshold like the contract's `0.1%` minimum): confirm the
+   resulting `claimed` payout actually lands in the buyer's wallet, or
+   that `cooling` shows the right classification and a working
+   "Resolve cooling period" action once `cooling_until_day` passes.
+6. **Activity feed** — confirm transactions eventually show
+   "Finalized" and don't stay stuck on "Pending" after a page reload.
+
+## Design notes worth knowing
+
+- **Share-based underwriting pool.** Deposits mint shares proportional
+  to the pool's current value (like a simple vault), so premiums earned
+  over time increase the redemption value of every share — not just
+  the depositor who happened to fund a specific policy.
+- **Solvency by construction.** `create_policy` reserves the payout
+  amount out of the pool immediately; the pool can never promise more
+  than it can pay, and underwriters can only withdraw the unreserved
+  balance.
+- **Price tolerance, not exact match.** `check_depeg` uses a custom
+  validator (not `gl.eq_principle.strict_eq`) that accepts a small,
+  fixed tolerance (`PRICE_TOLERANCE_MICROS`, 0.2% of $1) between
+  validators' independently-fetched prices — deliberate, to tolerate
+  normal fetch-timing drift in live market data without opening the
+  door to manipulation.
+- **`str()`, not `copy_to_memory()`, for plain string fields.**
+  Attributes read off a `TreeMap`-stored dataclass (e.g.
+  `policy.coin_id`) come back as plain Python values, not live storage
+  references — passing them to `gl.storage.copy_to_memory()` throws
+  `AssertionError: assert td is not None`. Fields used inside a
+  non-deterministic block are wrapped with `str()`/`int()` instead.
+- **`_Wallet`, not `gl.get_contract_at()`, for payouts.**
+  `gl.get_contract_at(addr).emit_transfer(...)` is for Intelligent
+  Contract-to-Intelligent Contract transfers only. Sending GEN to a
+  buyer's or underwriter's MetaMask address (an EOA) needs the
+  `@gl.evm.contract_interface` pattern instead — using the wrong one
+  looks fine at the outer call level but the actual value transfer
+  fails silently at execution time.
+- **`last_checked_day` / `last_price_micros` persist the last check.**
+  Without these, the result of a `check_depeg` call only existed in
+  the frontend's transient state and vanished on reload. The contract
+  now remembers it.
 
 ## Non-upgradability
 
-`contracts/sepadan.py` never populates `upgraders` in `__init__`.
-GenVM's automatic `root.lock_default()` call after `__init__` returns
-permanently locks the code slot. There is no admin function, no fee
-setter, and no override anywhere in the contract — this is also why
-`request_manual_review()` is a permissionless grace-period extension
-rather than a queue someone privileged resolves.
+`contracts/sepadan.py` never populates the `upgraders` list in
+`__init__`. GenVM automatically calls `root.lock_default()` right after
+`__init__` returns, permanently locking the code slot. There is no
+admin function and no override anywhere in the contract.
 
-## What changed from v1
+## Path forward
 
-The original version only ran Stage 1 (numeric threshold check) — a
-depeg of any cause paid out identically, and there was no LLM
-reasoning step anywhere in the contract. This revision adds Stage 2
-classification, JestoraArena-style business-rule validators (rejecting
-inconsistent field *combinations*, not just malformed individual
-fields), explicit `data_quality` gating, non-crashing fetch-failure
-handling with a manual-review fallback, and a division-by-zero guard
-in the share-minting math (`deposit()` when `pool_balance == 0` but
-`total_shares > 0`, e.g. after a full pool drain).
+- **Continued development.** The two-stage design (numeric → AI
+  classification) extends to more coins and more classification
+  nuance without changing the core contract shape — next up is
+  widening `SUPPORTED_COINS` past the four majors and tuning the
+  confidence thresholds against real depeg history rather than the
+  estimated defaults currently in `contracts/sepadan.py`.
+- **Real external use.** Parametric depeg cover is a genuine gap for
+  anyone holding stablecoin treasury on-chain — DAOs, small protocols,
+  and individual holders currently have no on-chain way to hedge this
+  risk without trusting a centralized insurer's claims process. Sepadan's
+  claims process is the point: nobody has to trust anyone.
+- **Community angle.** The share-based underwriting pool is
+  reusable as a pattern beyond this specific contract — the same
+  structure (deposit → shares → reserve-then-payout → release)
+  applies to any parametric coverage product, not just stablecoin
+  depegs.
 
 ## License
 

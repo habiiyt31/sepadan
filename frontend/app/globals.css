@@ -2,53 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
+:root {
   color-scheme: dark;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  @apply bg-ink-950 text-slate-100 antialiased;
+  @apply bg-ink-950 text-parchment antialiased;
+  font-feature-settings: "ss01" 1;
 }
 
 ::selection {
-  @apply bg-mint-500/30 text-white;
+  @apply bg-brass-500/30 text-white;
 }
 
-.card {
-  @apply rounded-2xl border border-white/10 bg-ink-900/60 p-5 sm:p-6 shadow-glow backdrop-blur;
+/* Visible keyboard focus everywhere, not just the browser default */
+:focus-visible {
+  @apply outline-none ring-2 ring-brass-400/70 ring-offset-2 ring-offset-ink-950;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- Ledger surfaces ---------- *
+ * A thin brass rule along the top edge instead of a border-all card —
+ * evokes a ledger page / instrument panel rather than a generic
+ * rounded card with a drop shadow.
+ */
+.ledger {
+  @apply relative rounded-lg border border-ink-700/60 bg-ink-900/70 p-5 sm:p-6;
+}
+.ledger::before {
+  content: "";
+  @apply absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brass-500/70 to-transparent;
+}
+
+.ledger-row {
+  @apply flex items-center justify-between gap-3 border-b border-ink-700/50 py-3 last:border-b-0;
+}
+
+/* ---------- The peg line: the one signature element ---------- *
+ * A literal baseline representing $1.00. Anything plotted against it
+ * (a price marker) sits above/below by its actual deviation, scaled.
+ * This is functional, not decorative -- it encodes real deviation.
+ */
+.peg-line {
+  @apply relative h-px w-full bg-peg-line;
+}
+.peg-line::after {
+  content: "$1.00";
+  @apply absolute right-0 top-1.5 font-mono text-[10px] tracking-wide text-brass-400/80;
+}
+
+/* ---------- Buttons ---------- */
 .btn-primary {
-  @apply inline-flex items-center justify-center rounded-xl bg-mint-500 px-4 py-2.5
-    text-sm font-semibold text-ink-950 transition hover:bg-mint-400
-    disabled:cursor-not-allowed disabled:opacity-40;
+  @apply inline-flex items-center justify-center rounded-md bg-brass-500 px-4 py-2.5
+    font-display text-sm font-medium tracking-wide text-ink-950 transition
+    hover:bg-brass-400 disabled:cursor-not-allowed disabled:opacity-40;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center rounded-xl border border-white/15
-    bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-100 transition
-    hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40;
+  @apply inline-flex items-center justify-center rounded-md border border-ink-600
+    bg-transparent px-4 py-2.5 font-display text-sm font-medium tracking-wide text-parchment
+    transition hover:border-brass-500/60 hover:text-brass-300
+    disabled:cursor-not-allowed disabled:opacity-40;
 }
 
-.input {
-  @apply w-full rounded-xl border border-white/10 bg-ink-800/60 px-3.5 py-2.5 text-sm
-    text-slate-100 placeholder:text-slate-500 outline-none transition
-    focus:border-mint-500/60 focus:ring-2 focus:ring-mint-500/20;
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-md px-3 py-2 text-sm text-ink-600
+    transition hover:text-parchment disabled:cursor-not-allowed disabled:opacity-40;
 }
 
-.select {
-  @apply w-full rounded-xl border border-white/10 bg-ink-800/60 px-3.5 py-2.5 text-sm
-    text-slate-100 outline-none transition focus:border-mint-500/60 focus:ring-2 focus:ring-mint-500/20;
+/* ---------- Form fields ---------- */
+.field-label {
+  @apply mb-1.5 block text-xs font-medium uppercase tracking-[0.08em] text-ink-600;
 }
 
-.label {
-  @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400;
+.field-input {
+  @apply w-full rounded-md border border-ink-700 bg-ink-800/60 px-3.5 py-2.5
+    font-mono text-sm text-parchment placeholder:text-ink-600 outline-none transition
+    focus:border-brass-500/60;
 }
 
+.field-select {
+  @apply w-full rounded-md border border-ink-700 bg-ink-800/60 px-3.5 py-2.5
+    text-sm text-parchment outline-none transition focus:border-brass-500/60;
+}
+
+.field-hint {
+  @apply mt-1.5 text-xs text-ink-600;
+}
+
+/* ---------- Numeric figures (ledger-style tabular numbers) ---------- */
+.figure {
+  @apply font-mono tabular-nums;
+}
+
+/* ---------- Status pills ---------- */
 .pill {
-  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px]
+    uppercase tracking-wide;
 }
 
-.stat {
-  @apply rounded-xl border border-white/10 bg-ink-800/40 p-4;
+/* ---------- Empty / loading states ---------- */
+.void-state {
+  @apply ledger flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-600;
 }

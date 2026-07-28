@@ -6,14 +6,7 @@
   "scripts": {
     "network": "genlayer network",
     "lint": "genvm-lint check contracts/sepadan.py",
-    "deploy": "genlayer deploy",
     "dev": "cd frontend && npm run dev",
-    "build": "cd frontend && npm run build",
-    "test": "gltest --network studionet"
-  },
-  "devDependencies": {
-    "genlayer-js": "^1.1.7",
-    "typescript": "^5.4.0",
-    "ts-node": "^10.9.2"
+    "build": "cd frontend && npm run build"
   }
 }

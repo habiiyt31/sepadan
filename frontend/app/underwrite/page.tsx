@@ -41,11 +41,11 @@ export default function UnderwritePage() {
     setSuccess(null);
     try {
       await deposit(address, genToWei(depositAmount));
-      setSuccess(`Deposited ${depositAmount} GEN — shares minted.`);
+      setSuccess(`Deposited ${depositAmount} GEN. Shares minted.`);
       setDepositAmount("");
       await load();
     } catch (err: any) {
-      setError(err?.message ?? "Deposit failed");
+      setError(err?.message ?? "Deposit failed.");
     } finally {
       setBusy(null);
     }
@@ -59,9 +59,6 @@ export default function UnderwritePage() {
     setSuccess(null);
     try {
       const shares = genToWei(withdrawShares);
-      // Same formula the contract uses — computed here just to show a
-      // meaningful success message; the contract's own math is what
-      // actually executes and is the source of truth.
       const estimate =
         pool && pool.total_shares > BigInt(0)
           ? (shares * pool.pool_balance) / pool.total_shares
@@ -72,8 +69,7 @@ export default function UnderwritePage() {
       await load();
     } catch (err: any) {
       setError(
-        err?.message ??
-          "Withdraw failed — you may be trying to withdraw more than the pool's unreserved balance."
+        err?.message ?? "Withdraw failed. You may be asking for more than the pool's unreserved balance."
       );
     } finally {
       setBusy(null);
@@ -81,31 +77,31 @@ export default function UnderwritePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Underwrite the pool</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Deposit GEN, earn shares. Withdraw anytime the pool isn't reserving your capital.
+        <h1 className="font-display text-2xl font-semibold tracking-tight">Underwrite the pool</h1>
+        <p className="mt-1 text-sm text-ink-600">
+          Deposit GEN and earn shares. Withdraw whatever the pool isn't reserving for open policies.
         </p>
       </div>
 
       {pool && (
-        <div className="card">
+        <div className="ledger">
           <PoolStats pool={pool} />
         </div>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <form onSubmit={handleDeposit} className="card space-y-4">
-          <h2 className="text-sm font-semibold text-mint-400">Deposit</h2>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={handleDeposit} className="ledger space-y-4">
+          <h2 className="font-display text-sm font-semibold text-brass-400">Deposit</h2>
           <div>
-            <label className="label" htmlFor="deposit">Amount (GEN)</label>
+            <label className="field-label" htmlFor="deposit">Amount (GEN)</label>
             <input
               id="deposit"
               type="number"
               step="0.0001"
               min="0"
-              className="input"
+              className="field-input"
               placeholder="10"
               value={depositAmount}
               onChange={(e) => setDepositAmount(e.target.value)}
@@ -119,30 +115,24 @@ export default function UnderwritePage() {
           </button>
         </form>
 
-        <form onSubmit={handleWithdraw} className="card space-y-4">
-          <h2 className="text-sm font-semibold text-mint-400">Withdraw</h2>
+        <form onSubmit={handleWithdraw} className="ledger space-y-4">
+          <h2 className="font-display text-sm font-semibold text-brass-400">Withdraw</h2>
           <div>
-            <label className="label" htmlFor="withdraw">Shares to burn</label>
+            <label className="field-label" htmlFor="withdraw">Shares to burn</label>
             <input
               id="withdraw"
               type="number"
               step="0.0001"
               min="0"
-              className="input"
+              className="field-input"
               placeholder="5"
               value={withdrawShares}
               onChange={(e) => setWithdrawShares(e.target.value)}
               required
             />
-            <p className="mt-1.5 text-xs text-slate-500">
-              Minted 1:1 with GEN at deposit time.
-            </p>
+            <p className="field-hint">Minted 1:1 with GEN at deposit time.</p>
           </div>
-          <button
-            type="submit"
-            className="btn-secondary w-full"
-            disabled={busy === "withdraw"}
-          >
+          <button type="submit" className="btn-secondary w-full" disabled={busy === "withdraw"}>
             {!address
               ? connecting ? "Connecting…" : "Connect wallet"
               : busy === "withdraw" ? "Withdrawing…" : "Withdraw"}
@@ -151,12 +141,12 @@ export default function UnderwritePage() {
       </div>
 
       {error && (
-        <div className="card border-danger-400/30 bg-danger-400/5 text-sm text-danger-400">
+        <div className="ledger border-alert-500/40 bg-alert-500/5 text-sm text-alert-400">
           {error}
         </div>
       )}
       {success && (
-        <div className="card border-mint-500/30 bg-mint-500/5 text-sm text-mint-400">
+        <div className="ledger border-confirm-500/40 bg-confirm-500/5 text-sm text-confirm-400">
           {success}
         </div>
       )}

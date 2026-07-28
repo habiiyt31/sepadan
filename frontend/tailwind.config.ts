@@ -6,33 +6,43 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          950: "#0a0e13",
-          900: "#0f151d",
-          800: "#161f2b",
-          700: "#212d3d",
+          950: "#10131a",
+          900: "#161b26",
+          800: "#1f2635",
+          700: "#2a3345",
+          600: "#3a4459",
         },
-        mint: {
-          400: "#4ade80",
-          500: "#22c55e",
-          600: "#16a34a",
+        brass: {
+          300: "#e8cf9b",
+          400: "#ddb968",
+          500: "#c9a24b",
+          600: "#a8843a",
         },
         peg: {
-          400: "#38bdf8",
-          500: "#0ea5e9",
+          400: "#8fb2de",
+          500: "#6f9bd1",
+          600: "#5580b8",
         },
-        warn: {
-          400: "#fb923c",
+        alert: {
+          400: "#dc7a71",
+          500: "#cc5c52",
+          600: "#ab4941",
         },
-        danger: {
-          400: "#f87171",
+        confirm: {
+          400: "#9ac295",
+          500: "#7fa87a",
+          600: "#658c60",
         },
+        parchment: "#e8e3d6",
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        display: ["var(--font-display)", "ui-sans-serif", "sans-serif"],
+        sans: ["var(--font-body)", "ui-sans-serif", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
-      boxShadow: {
-        glow: "0 0 0 1px rgba(34, 197, 94, 0.15), 0 8px 30px rgba(34, 197, 94, 0.08)",
+      backgroundImage: {
+        "peg-line":
+          "linear-gradient(90deg, transparent, rgba(201,162,75,0.35) 15%, rgba(201,162,75,0.35) 85%, transparent)",
       },
     },
   },

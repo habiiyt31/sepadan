@@ -20,9 +20,9 @@ export default function PoliciesPage() {
         const policies = await Promise.all(
           ids.map(async (id) => ({ ...(await getPolicy(id)), id }))
         );
-        setRows(policies.reverse()); // newest first
+        setRows(policies.reverse());
       } catch (err: any) {
-        setError(err?.message ?? "Failed to load policies");
+        setError(err?.message ?? "Couldn't load policies.");
       } finally {
         setLoading(false);
       }
@@ -31,32 +31,42 @@ export default function PoliciesPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">All policies</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">Policies</h1>
         <Link href="/policy/new" className="btn-primary">Buy cover</Link>
       </div>
 
-      {loading && <div className="card text-center text-sm text-slate-400">Loading…</div>}
-      {error && <div className="card text-center text-sm text-danger-400">{error}</div>}
+      {loading && <div className="ledger text-center text-sm text-ink-600">Loading…</div>}
+      {error && <div className="ledger border-alert-500/40 text-center text-sm text-alert-400">{error}</div>}
+
       {!loading && !error && rows.length === 0 && (
-        <div className="card text-center text-sm text-slate-400">No policies yet.</div>
+        <div className="void-state">
+          <p>No policies yet.</p>
+          <Link href="/policy/new" className="text-brass-400 hover:text-brass-300">
+            Buy the first one →
+          </Link>
+        </div>
       )}
 
-      <div className="space-y-2">
+      <div className="ledger p-0 sm:p-0">
         {rows.map((p) => (
           <Link
             key={p.id}
             href={`/policy/${p.id}`}
-            className="flex items-center justify-between rounded-xl border border-white/10 bg-ink-900/60 px-4 py-3 transition hover:border-mint-500/40"
+            className="ledger-row px-5 transition hover:bg-ink-800/40 sm:px-6"
           >
             <div>
-              <p className="text-xs text-slate-500">#{p.id}</p>
-              <p className="font-semibold uppercase">{p.coin_id}</p>
+              <p className="font-mono text-[11px] text-ink-700">#{p.id}</p>
+              <p className="font-display text-sm font-semibold uppercase tracking-wide">
+                {p.coin_id}
+              </p>
             </div>
-            <div className="text-right text-sm">
-              <p className="text-slate-300">{formatGen(p.payout_amount)} GEN</p>
-              <p className="text-xs text-slate-500">{(p.threshold_bps / 100).toFixed(2)}% threshold</p>
+            <div className="text-right">
+              <p className="figure text-sm text-parchment">{formatGen(p.payout_amount)} GEN</p>
+              <p className="figure text-[11px] text-ink-600">
+                {(p.threshold_bps / 100).toFixed(2)}% threshold
+              </p>
             </div>
             <StatusPill status={p.status} />
           </Link>

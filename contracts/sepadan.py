@@ -137,6 +137,8 @@ class Policy:
     consecutive_fetch_failures: u32
     cooling_until_day: u32
     manual_reviews_requested: u32
+    last_checked_day: u32                # 0 until the first successful (RELIABLE) price check
+    last_price_micros: u32               # last RELIABLE price seen, 1_000_000 == $1.00
 
 
 # ── Pure helpers (no genlayer imports needed; duplicated in tests) ────────
@@ -342,6 +344,8 @@ class Sepadan(gl.Contract):
             consecutive_fetch_failures=u32(0),
             cooling_until_day=u32(0),
             manual_reviews_requested=u32(0),
+            last_checked_day=u32(0),
+            last_price_micros=u32(0),
         )
         self.next_policy_id = u32(pid + 1)
 
@@ -395,11 +399,25 @@ class Sepadan(gl.Contract):
         data_quality = str(price_result["data_quality"])
 
         if data_quality != "RELIABLE":
+            # Expiry doesn't need a price at all -- it's just a day
+            # count. Checking it here too, not only on the RELIABLE
+            # path below, matters: without this, a policy whose
+            # duration has already passed would stay stuck "active"
+            # forever if the price feed happened to be unreachable on
+            # every check after expiry, leaving its reserved capital
+            # locked out of the pool indefinitely.
+            expired_without_price = int(current_day) > int(policy.start_day) + int(policy.duration_days)
             policy.consecutive_fetch_failures = u32(int(policy.consecutive_fetch_failures) + 1)
+            if expired_without_price:
+                self.reserved = u256(int(self.reserved) - int(policy.payout_amount))
+                policy.status = "expired"
+                return "expired"
             return "active"
 
         policy.consecutive_fetch_failures = u32(0)
         price_micros = int(price_result["price_micros"])
+        policy.last_checked_day = current_day
+        policy.last_price_micros = u32(price_micros)
         deviation_bps = abs(price_micros - USD_MICROS) * 10000 // USD_MICROS
         expired = int(current_day) > int(policy.start_day) + int(policy.duration_days)
 
@@ -583,6 +601,8 @@ Rules you must follow exactly:
             return "cooling"
 
         price_micros = int(result["price_micros"])
+        policy.last_checked_day = current_day
+        policy.last_price_micros = u32(price_micros)
         deviation_bps = abs(price_micros - USD_MICROS) * 10000 // USD_MICROS
 
         if deviation_bps >= threshold_bps:

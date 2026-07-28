@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { getActivityLog, explorerTxUrl, type ActivityEntry } from "@/lib/activityLog";
+import { reconcilePendingActivity } from "@/lib/contract";
 
 function shortHash(hash: string) {
-  return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
+  return `${hash.slice(0, 8)}···${hash.slice(-6)}`;
 }
 
 function timeAgo(ts: number): string {
@@ -17,15 +18,15 @@ function timeAgo(ts: number): string {
 }
 
 const STATUS_LABEL: Record<ActivityEntry["status"], string> = {
-  pending: "Pending…",
+  pending: "Pending",
   finalized: "Finalized",
   "pending-long": "Still finalizing",
 };
 
 const STATUS_COLOR: Record<ActivityEntry["status"], string> = {
-  pending: "text-warn-400",
-  finalized: "text-mint-400",
-  "pending-long": "text-warn-400",
+  pending: "text-brass-400",
+  finalized: "text-confirm-400",
+  "pending-long": "text-brass-400",
 };
 
 export function ActivityFeed({ filterFn }: { filterFn?: (e: ActivityEntry) => boolean }) {
@@ -36,10 +37,15 @@ export function ActivityFeed({ filterFn }: { filterFn?: (e: ActivityEntry) => bo
       const all = getActivityLog();
       setEntries(filterFn ? all.filter(filterFn) : all);
     }
+
     refresh();
+    reconcilePendingActivity().then(refresh);
+
     window.addEventListener("sepadan:activity-updated", refresh);
     window.addEventListener("storage", refresh);
-    const interval = setInterval(refresh, 4000); // catch pending -> finalized transitions
+    const interval = setInterval(() => {
+      reconcilePendingActivity().then(refresh);
+    }, 8000);
     return () => {
       window.removeEventListener("sepadan:activity-updated", refresh);
       window.removeEventListener("storage", refresh);
@@ -49,26 +55,32 @@ export function ActivityFeed({ filterFn }: { filterFn?: (e: ActivityEntry) => bo
   }, []);
 
   if (entries.length === 0) {
-    return <p className="text-sm text-slate-500">No transactions yet.</p>;
+    return (
+      <p className="py-2 text-sm text-ink-600">
+        No transactions from this browser yet — they'll show up here as you use the app.
+      </p>
+    );
   }
 
   return (
-    <div className="space-y-2">
+    <div>
       {entries.map((e) => (
         <a
           key={e.hash}
           href={explorerTxUrl(e.hash)}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center justify-between rounded-lg border border-white/10 bg-ink-800/40 px-3 py-2 text-xs transition hover:border-mint-500/30"
+          className="ledger-row group transition hover:border-brass-500/30"
         >
-          <div>
-            <span className="font-mono text-slate-300">{e.functionName}</span>
-            <span className="ml-2 text-slate-500">{shortHash(e.hash)}</span>
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-xs text-parchment group-hover:text-brass-300">
+              {e.functionName}
+            </span>
+            <span className="font-mono text-xs text-ink-600">{shortHash(e.hash)}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 text-xs">
             <span className={STATUS_COLOR[e.status]}>{STATUS_LABEL[e.status]}</span>
-            <span className="text-slate-600">{timeAgo(e.timestamp)}</span>
+            <span className="text-ink-700">{timeAgo(e.timestamp)}</span>
           </div>
         </a>
       ))}

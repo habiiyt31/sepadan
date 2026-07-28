@@ -1,6 +1,6 @@
 import { TransactionStatus } from "genlayer-js/types";
 import { CONTRACT_ADDRESS, getReadClient, ensureCorrectNetwork } from "./genlayer";
-import { logActivity, explorerTxUrl } from "./activityLog";
+import { logActivity, getActivityLog, explorerTxUrl } from "./activityLog";
 
 export type Policy = {
   buyer: string;
@@ -16,6 +16,8 @@ export type Policy = {
   consecutive_fetch_failures: number;
   cooling_until_day: number;
   manual_reviews_requested: number;
+  last_checked_day: number;
+  last_price_micros: number;
 };
 
 export type PoolState = {
@@ -49,6 +51,8 @@ export async function getPolicy(policyId: number): Promise<Policy> {
     consecutive_fetch_failures: Number(raw.consecutive_fetch_failures ?? 0),
     cooling_until_day: Number(raw.cooling_until_day ?? 0),
     manual_reviews_requested: Number(raw.manual_reviews_requested ?? 0),
+    last_checked_day: Number(raw.last_checked_day ?? 0),
+    last_price_micros: Number(raw.last_price_micros ?? 0),
   };
 }
 
@@ -98,7 +102,7 @@ export async function getAvailableCapacity(): Promise<bigint> {
 async function writeAndWait(
   walletAddress: `0x${string}`,
   functionName: string,
-  args: unknown[],
+  args: any[],
   value: bigint = BigInt(0)
 ) {
   const client = await ensureCorrectNetwork(walletAddress);
@@ -178,6 +182,43 @@ export async function requestManualReview(
   policyId: number
 ) {
   return writeAndWait(walletAddress, "request_manual_review", [policyId]);
+}
+
+// ---------------- reconciliation for orphaned "pending" entries ----------------
+// If a page was navigated away from / refreshed while writeAndWait was
+// still awaiting finalization, that promise never gets to write the
+// "finalized" update -- the transaction itself keeps going on-chain,
+// but the local log is stuck on "pending" forever. This re-checks any
+// pending entries against the actual chain state and catches them up.
+
+export async function reconcilePendingActivity(): Promise<void> {
+  const pending = getActivityLog().filter(
+    (e) => e.status === "pending" || e.status === "pending-long"
+  );
+  if (pending.length === 0) return;
+
+  const client = getReadClient();
+
+  await Promise.all(
+    pending.map(async (entry) => {
+      try {
+        // Short check, not a long wait -- if it's already finalized
+        // on-chain this resolves almost immediately; if not, it times
+        // out quickly and we just leave the entry as-is for the next
+        // reconciliation pass.
+        await client.waitForTransactionReceipt({
+          hash: entry.hash as any,
+          status: TransactionStatus.FINALIZED,
+          retries: 3,
+          interval: 1000,
+        });
+        logActivity({ ...entry, status: "finalized", timestamp: entry.timestamp });
+      } catch {
+        // Not finalized yet (or still can't confirm) -- try again on
+        // the next reconciliation pass rather than guessing.
+      }
+    })
+  );
 }
 
 // ---------------- helpers ----------------
