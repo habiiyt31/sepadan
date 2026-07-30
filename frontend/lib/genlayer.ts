@@ -1,10 +1,15 @@
 import { createClient } from "genlayer-js";
 import { studionet, testnetBradbury } from "genlayer-js/chains";
-import type { GenLayerChain } from "genlayer-js/chains";
 
 const NETWORK = process.env.NEXT_PUBLIC_GENLAYER_NETWORK ?? "studionet";
 
-export function resolveChain(): GenLayerChain {
+// No explicit return type here on purpose: genlayer-js/chains doesn't
+// export a public "GenLayerChain" type to annotate this with, and
+// guessing at internal type names has broken the build before.
+// Letting TypeScript infer the return type from studionet/
+// testnetBradbury themselves is more resilient to the SDK's internal
+// type layout changing between versions.
+export function resolveChain() {
   switch (NETWORK) {
     case "studionet":
       return studionet;

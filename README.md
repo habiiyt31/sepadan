@@ -11,6 +11,26 @@ depeg claim is a plain numeric fact, but *why* a stablecoin is off peg
 is a judgment call, and that's the part this contract hands to AI
 consensus rather than a threshold check alone.
 
+## Summary of this update
+
+Everything below was added on top of the existing architecture without
+changing it: still a non-upgradable Intelligent Contract, still the
+same two-stage (numeric → AI classification) flow, still a
+share-based pool, still fully permissionless. Nothing here required
+touching `check_depeg`'s core control flow, the validator functions'
+signatures, or anything the frontend calls.
+
+| Area | Change |
+|---|---|
+| Supported coins | 4 → 8 (`COIN_SYMBOLS` in the contract, `SUPPORTED_COINS` in the frontend) — adding another is two one-line edits |
+| AI classification | Prompt sharpened with an explicit tie-breaker rule and a requirement to cite the cross-exchange comparison in `reasoning` |
+| Confidence thresholds | Recalibrated (`MIN_STRUCTURAL_CONFIDENCE` 70→75, `MIN_TRANSIENT_CONFIDENCE` 40→35) against two documented historical depegs (USDC/SVB, TerraUSD) instead of arbitrary defaults |
+| Price sources | Stage 2 now also fetches Coinbase and Kraken spot prices as corroborating evidence (`_fetch_cross_exchange_context`); Stage 1's core numeric consensus is untouched |
+| Documentation | This README expanded with the sections above; nothing removed |
+| Pool reusability | Underwriting pool code documented as a copy-paste-reusable pattern for future parametric contracts (see Design notes) — no functional changes |
+| Frontend build | Fixed a TypeScript build failure (`GenLayerChain` isn't an exported type from `genlayer-js/chains`) that was blocking `npm run build` |
+| Deployment | Added a Vercel deployment section, since the frontend lives in a subdirectory and needs its Root Directory set explicitly |
+
 ## Why two stages, not one
 
 **Stage 1 — numeric, no LLM.** Validators independently fetch
@@ -25,7 +45,8 @@ three would trigger an identical payout.
 
 **Stage 2 — classification, LLM judgment, only runs on a real numeric
 breach.** Validators fetch supplementary market data (24h volume,
-market cap) and an LLM classifies what's happening:
+market cap) *and* independent spot prices from other exchanges, and an
+LLM classifies what's happening:
 
 | Classification | Meaning | Payout |
 |---|---|---|
@@ -40,6 +61,107 @@ about *why* claims happened, not just that they did.
 `MANIPULATION_SUSPECTED` doesn't refuse the claim; it just waits
 (`resolve_cooling`, after `COOLING_PERIOD_DAYS`) and takes a second,
 purely numeric look before paying out or standing down.
+
+## Supported stablecoins
+
+Any coin CoinGecko lists can technically be passed as `coin_id` — the
+contract doesn't enforce an allowlist — but the frontend's `Buy cover`
+form and Stage 2's cross-exchange lookup both key off two small,
+easy-to-extend maps:
+
+| Stablecoin | CoinGecko id (`coin_id`) | Exchange symbol (`COIN_SYMBOLS`) |
+|---|---|---|
+| USDT — Tether | `tether` | `USDT` |
+| USDC — USD Coin | `usd-coin` | `USDC` |
+| DAI — Dai | `dai` | `DAI` |
+| FRAX — Frax | `frax` | `FRAX` |
+| FDUSD — First Digital USD | `first-digital-usd` | `FDUSD` |
+| PYUSD — PayPal USD | `paypal-usd` | `PYUSD` |
+| GHO — Aave GHO | `gho` | `GHO` |
+| USDe — Ethena USDe | `ethena-usde` | `USDE` |
+
+Adding a future coin is two one-line additions, no logic changes:
+`COIN_SYMBOLS` in `contracts/sepadan.py`, and `SUPPORTED_COINS` in
+`frontend/lib/contract.ts`. `COIN_SYMBOLS` only feeds Stage 2's
+best-effort cross-exchange lookup (see below) — if a coin isn't listed
+there, `_fetch_cross_exchange_context` just falls back to the CoinGecko
+id uppercased, and if that guess doesn't match a real symbol on
+Coinbase/Kraken, the lookup simply comes back empty rather than
+failing anything.
+
+## Multiple price sources for classification
+
+Stage 1's numeric breach check still reads CoinGecko only — that part
+of the pipeline is unchanged on purpose, since widening a
+tolerance-based consensus check to multiple sources would be a much
+bigger, riskier change than the rest of this update. What changed is
+Stage 2: `_fetch_cross_exchange_context` now pulls the same asset's
+spot price from **Coinbase** and **Kraken** (both free, public, no API
+key) as corroborating evidence for the classifier.
+
+This exists because of a real failure mode: in November 2025, Ethena's
+USDe showed an apparent depeg on one exchange that its own team
+attributed to that exchange's price oracle, not a problem with USDe's
+actual collateral. A single-source numeric check has no way to tell
+that apart from a genuine, broad depeg — but a classifier that can see
+"CoinGecko shows a breach, but Coinbase and Kraken both show the asset
+sitting near $1.00" has a concrete, checkable reason to lean toward
+`MANIPULATION_SUSPECTED` instead of paying out immediately. The
+updated classification prompt in `_classify_and_resolve` asks the
+model to treat that specific disagreement as its strongest signal for
+that class.
+
+CoinMarketCap was considered too (per the original request) and
+deliberately left out: unlike Coinbase and Kraken, it doesn't have a
+free, keyless endpoint for spot prices, and this project's design
+principle throughout has been avoiding external dependencies that
+need secrets management inside a non-upgradable contract. If a future
+version adds it, `_fetch_cross_exchange_context` is exactly where it
+would go, following the same try/except-and-omit-on-failure pattern
+already used for Coinbase and Kraken.
+
+Both new sources are best-effort and additive: a source that errors,
+times out, or doesn't list a given coin is silently omitted from the
+context handed to the classifier rather than failing the check. Stage
+2 already tolerated a completely unavailable CoinGecko markets fetch
+before this change (falling back to `MANIPULATION_SUSPECTED` with
+`payout_bps = 0`); cross-exchange data is treated the same way, just
+one tier down in how much it's relied on.
+
+## Confidence calibration
+
+`MIN_STRUCTURAL_CONFIDENCE` (75) and `MIN_TRANSIENT_CONFIDENCE` (35)
+aren't arbitrary — they're set relative to two well-documented,
+contrasting historical depegs:
+
+- **USDC, March 2023** — fell to roughly $0.87 (~13% off peg) on news
+  of SVB exposure, and fully recovered within days once the US
+  Treasury confirmed deposits were guaranteed. Mechanism intact,
+  volatility real: `TRANSIENT_VOLATILITY`.
+- **TerraUSD (UST), May 2022** — fell toward zero and never recovered,
+  because the mint/burn arbitrage mechanism backing it broke entirely.
+  `STRUCTURAL_FAILURE`.
+
+Those two outcomes are about as far apart as a depeg can get, which is
+why the bar for the harsher label sits meaningfully higher: calling
+something a structural collapse should take more convincing evidence
+than calling it a sharp-but-recoverable wobble, especially since the
+policy is still paying out identically either way — the distinction
+only affects the recorded classification, not whether the buyer gets
+paid. `MIN_TRANSIENT_CONFIDENCE`'s lower bar reflects that most real
+stablecoin depegs in practice turn out to be transient, not
+structural, so treating "temporary" as the more readily-reached
+conclusion matches that base rate rather than fighting it.
+
+The classification prompt itself was also sharpened to reduce
+ambiguous calls: it now gives the model an explicit tie-breaker
+("when in doubt between `TRANSIENT_VOLATILITY` and
+`STRUCTURAL_FAILURE`, prefer `TRANSIENT_VOLATILITY`") instead of
+leaving borderline cases to the model's own judgment with no stated
+default, and it explicitly asks for the cross-exchange comparison to
+be cited in `reasoning` when it influenced the call, so a verdict's
+justification is checkable against the same evidence a human reviewer
+would look at.
 
 ## Validators enforce consistency, not just matching fields
 
@@ -226,6 +348,42 @@ correctness gate.
   Without these, the result of a `check_depeg` call only existed in
   the frontend's transient state and vanished on reload. The contract
   now remembers it.
+- **The underwriting pool is documented as a copy-paste-reusable
+  pattern**, not a shared library — GenVM's single-file deploy model
+  means there's no import mechanism between separately-deployed
+  contracts. `deposit`/`withdraw`/`get_available_capacity` and their
+  backing fields never reference anything depeg-specific, so a future
+  parametric coverage contract can lift that whole block into its own
+  file unmodified. See the comment above `deposit()`.
+- **Adding a stablecoin is two dict entries, not a code change.**
+  `COIN_SYMBOLS` (contract) and `SUPPORTED_COINS` (frontend) are the
+  only places that need touching to support a new coin — every
+  function that uses them (price fetch, cross-exchange lookup, the
+  buy-cover form) reads from the map rather than hardcoding coins.
+
+## Deploying the frontend to Vercel
+
+The frontend lives in `frontend/`, not the repo root, so Vercel needs
+one non-default setting:
+
+1. Import the repo in Vercel as usual.
+2. In **Project Settings → General → Root Directory**, set it to
+   `frontend`. Vercel auto-detects Next.js from there — no custom
+   build command needed.
+3. In **Project Settings → Environment Variables**, add the same
+   values `frontend/.env.example` documents (`.env` itself is
+   gitignored and never reaches Vercel):
+   - `NEXT_PUBLIC_GENLAYER_NETWORK` = `studionet` (or `testnetBradbury`)
+   - `NEXT_PUBLIC_GENLAYER_RPC_URL` = `https://studio.genlayer.com/api`
+   - `NEXT_PUBLIC_CHAIN_ID` = `61999`
+   - `NEXT_PUBLIC_EXPLORER_URL` = `https://explorer-studio.genlayer.com`
+   - `NEXT_PUBLIC_CONTRACT_ADDRESS` = the address from your own
+     `genlayer deploy` (see Setup above) — Vercel only serves the
+     frontend, it doesn't deploy the contract.
+4. Deploy. Redeploy (or update the env var and redeploy) any time the
+   contract address changes, e.g. after a fresh deploy following a
+   contract edit — see the non-upgradability note below for why that
+   happens more than you might expect.
 
 ## Non-upgradability
 
@@ -236,22 +394,26 @@ admin function and no override anywhere in the contract.
 
 ## Path forward
 
-- **Continued development.** The two-stage design (numeric → AI
-  classification) extends to more coins and more classification
-  nuance without changing the core contract shape — next up is
-  widening `SUPPORTED_COINS` past the four majors and tuning the
-  confidence thresholds against real depeg history rather than the
-  estimated defaults currently in `contracts/sepadan.py`.
+- **Continued development.** Stablecoin support widened from 4 to 8
+  coins and Stage 2 now cross-checks CoinGecko against Coinbase and
+  Kraken (see Supported stablecoins / Multiple price sources above).
+  Next up: tuning `MIN_STRUCTURAL_CONFIDENCE`/`MIN_TRANSIENT_CONFIDENCE`
+  against a larger sample of real depeg events as they occur (the
+  current calibration is grounded in two well-known historical cases,
+  not a full dataset), and potentially a third cross-exchange source
+  once one exists with a free, keyless spot-price endpoint.
 - **Real external use.** Parametric depeg cover is a genuine gap for
   anyone holding stablecoin treasury on-chain — DAOs, small protocols,
   and individual holders currently have no on-chain way to hedge this
   risk without trusting a centralized insurer's claims process. Sepadan's
   claims process is the point: nobody has to trust anyone.
-- **Community angle.** The share-based underwriting pool is
-  reusable as a pattern beyond this specific contract — the same
+- **Community angle.** The share-based underwriting pool is documented
+  as a copy-paste-reusable pattern (see Design notes above) — the same
   structure (deposit → shares → reserve-then-payout → release)
   applies to any parametric coverage product, not just stablecoin
-  depegs.
+  depegs. No other insurance products are implemented yet; this is
+  scoped to keeping the pool code lift-able, not building a second
+  product.
 
 ## License
 

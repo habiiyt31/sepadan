@@ -10,6 +10,7 @@ const TRACKED = [
   { label: "USDT", note: "typically within 0.1% of peg" },
   { label: "USDC", note: "typically within 0.1% of peg" },
   { label: "DAI", note: "wider band, over-collateralized" },
+  { label: "USDe", note: "synthetic, cross-exchange checked" },
 ];
 
 export default function HomePage() {

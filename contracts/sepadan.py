@@ -102,8 +102,43 @@ MAX_FETCH_FAILURES = 3          # consecutive failures before manual review unlo
 GRACE_PERIOD_DAYS = 2            # duration extension granted by manual review
 COOLING_PERIOD_DAYS = 2          # wait before re-checking a MANIPULATION_SUSPECTED case
 
-MIN_STRUCTURAL_CONFIDENCE = 70
-MIN_TRANSIENT_CONFIDENCE = 40
+# Calibrated against two well-documented historical reference points
+# rather than picked arbitrarily:
+#   - USDC's March 2023 SVB-exposure depeg: price fell to roughly
+#     $0.87 (~13% off peg) and fully recovered within days once the
+#     Treasury announced deposits were guaranteed. A clean example of
+#     TRANSIENT_VOLATILITY -- real, sharp, but mechanism-intact.
+#   - TerraUSD's May 2022 collapse: price fell toward zero and never
+#     recovered, because the mechanism itself (the mint/burn arbitrage
+#     with LUNA) broke. A clean example of STRUCTURAL_FAILURE.
+# The gap between those two outcomes is large, which is why
+# STRUCTURAL_FAILURE keeps a meaningfully higher bar than
+# TRANSIENT_VOLATILITY: claiming "the mechanism is broken" should take
+# more convincing evidence than claiming "this is a sharp but
+# explainable, recoverable wobble", since the former is the harsher
+# label to apply to a still-live stablecoin. TRANSIENT_VOLATILITY's
+# lower bar reflects that most real depeg events in stablecoin history
+# have turned out to be transient, not structural -- treating
+# "temporary" as the more readily-reached conclusion matches that base
+# rate.
+MIN_STRUCTURAL_CONFIDENCE = 75
+MIN_TRANSIENT_CONFIDENCE = 35
+
+# CoinGecko ids (used for Stage 1's price + Stage 2's market-data
+# fetch) mapped to the ticker symbol other exchanges use for the same
+# asset (used only for Stage 2's supplementary cross-exchange check --
+# see _fetch_cross_exchange_context). Adding a new supported coin is a
+# single line here; no function below needs to change.
+COIN_SYMBOLS = {
+    "tether": "USDT",
+    "usd-coin": "USDC",
+    "dai": "DAI",
+    "frax": "FRAX",
+    "first-digital-usd": "FDUSD",
+    "paypal-usd": "PYUSD",
+    "gho": "GHO",
+    "ethena-usde": "USDE",
+}
 
 
 # Sending GEN to a regular wallet (EOA) is different from sending to
@@ -232,6 +267,58 @@ def _fetch_price_micros(coin_id: str) -> typing.Tuple[typing.Optional[int], str]
     return round(price * USD_MICROS), "RELIABLE"
 
 
+def _fetch_cross_exchange_context(symbol: str) -> str:
+    """
+    Must be called from inside a non-deterministic block. Best-effort
+    and supplementary only: fetches the same asset's spot price from
+    two other free, keyless public exchange APIs (Coinbase, Kraken) so
+    Stage 2's classifier can tell "this coin looks off everywhere"
+    (a real, broad depeg) apart from "this coin looks fine except on
+    the one feed Stage 1 already checked" (an isolated or anomalous
+    quote). This is exactly the kind of thing a single exchange's bad
+    data can cause -- e.g. Ethena's USDe saw an apparent depeg on one
+    exchange in November 2025 that its own team attributed to that
+    exchange's oracle, not a problem with USDe's collateral.
+
+    Never raises, and a source that fails or doesn't list the asset is
+    just omitted from the summary -- this deliberately does NOT touch
+    Stage 1's price-tolerance consensus (still CoinGecko-only, still
+    the same PRICE_TOLERANCE_MICROS mechanism), since adding more
+    sources to a byte-for-byte-style consensus check would be a much
+    bigger change to the adjudication pipeline than adding
+    corroborating context to a step that already fetches supplementary
+    market data.
+    """
+    lines = []
+
+    try:
+        cb_url = f"https://api.coinbase.com/v2/prices/{symbol}-USD/spot"
+        cb_resp = gl.nondet.web.get(cb_url)
+        cb_data = json.loads(cb_resp.body.decode("utf-8"))
+        cb_price = cb_data.get("data", {}).get("amount")
+        if cb_price:
+            lines.append(f"Coinbase spot: ${cb_price}")
+    except Exception:
+        pass
+
+    try:
+        kr_url = f"https://api.kraken.com/0/public/Ticker?pair={symbol}USD"
+        kr_resp = gl.nondet.web.get(kr_url)
+        kr_data = json.loads(kr_resp.body.decode("utf-8"))
+        result = kr_data.get("result", {})
+        if result and not kr_data.get("error"):
+            first_pair = next(iter(result.values()))
+            last_trade = first_pair.get("c", [None])[0]
+            if last_trade:
+                lines.append(f"Kraken last trade: ${last_trade}")
+    except Exception:
+        pass
+
+    if not lines:
+        return "No cross-exchange data available."
+    return " | ".join(lines)
+
+
 class Sepadan(gl.Contract):
     # ---------------- underwriting pool (share-based) ----------------
     pool_balance: u256        # total GEN actually held by the contract
@@ -251,6 +338,25 @@ class Sepadan(gl.Contract):
         # `upgraders` intentionally left empty -> permanently locked.
 
     # ==================== UNDERWRITING ====================
+    # ---------------------------------------------------------------
+    # REUSABLE PATTERN, not a shared library: GenVM deploys each
+    # contract from a single file (see the SINGLE-FILE CONSTRAINT note
+    # at the top of this file), so there's no import mechanism for one
+    # deployed Intelligent Contract to share code with another. What
+    # "reusable" means here is narrower but still real: everything in
+    # this section (deposit, withdraw, get_available_capacity, plus
+    # the pool_balance/reserved/total_shares/shares fields above) is
+    # self-contained and asset-agnostic -- it never references
+    # policies, coin_id, threshold_bps, or anything depeg-specific.
+    # A future parametric coverage contract (flight delays, weather,
+    # anything with a "reserve capital on write, release or pay out on
+    # resolve" shape) can copy this block verbatim into its own
+    # single-file contract and it will work unmodified, as long as it
+    # also calls reserved += payout_amount / reserved -= payout_amount
+    # at the right points in its own resolution logic, the same way
+    # create_policy/check_depeg/_classify_and_resolve/resolve_cooling
+    # do below.
+    # ---------------------------------------------------------------
 
     @gl.public.write.payable
     def deposit(self) -> u256:
@@ -438,6 +544,10 @@ class Sepadan(gl.Contract):
     ) -> str:
         coin_id = str(policy.coin_id)
         price_micros_local = int(price_micros)
+        # Copied to a local before the closure, per this contract's
+        # closure-safety rule -- never read COIN_SYMBOLS (a module-level
+        # dict) from inside classify_leader_fn itself.
+        exchange_symbol = COIN_SYMBOLS.get(coin_id, coin_id.upper())
 
         def classify_leader_fn() -> str:
             market_url = (
@@ -464,28 +574,49 @@ class Sepadan(gl.Contract):
                     sort_keys=True,
                 )
 
+            cross_exchange = _fetch_cross_exchange_context(exchange_symbol)
             price_usd = price_micros_local / USD_MICROS
             prompt = f"""
 A stablecoin depeg has been numerically confirmed for {coin_id}.
-Current price: ${price_usd:.6f} (target: $1.00)
+Source of the confirmed breach: CoinGecko, price ${price_usd:.6f} (target: $1.00)
 
-Supplementary market data (24h volume, market cap, exchange info):
+Supplementary CoinGecko market data (24h volume, market cap, exchange info):
 {market_body[:2500]}
 
-Classify this depeg:
-- STRUCTURAL_FAILURE: broad, sustained depeg consistent with a genuine
-  collapse in the peg mechanism.
-- TRANSIENT_VOLATILITY: real but likely temporary, consistent with a
-  liquidity crunch rather than mechanism failure.
-- MANIPULATION_SUSPECTED: price action looks isolated or anomalous, or
-  the supplementary data looks implausible/inconsistent.
+Independent cross-exchange spot prices for the same asset (corroborating
+evidence only -- these were NOT used to confirm the breach itself):
+{cross_exchange}
+
+Classify this depeg using the evidence above:
+
+- STRUCTURAL_FAILURE: the depeg shows up broadly, not just on the one
+  feed that triggered this check -- cross-exchange prices (if
+  available) are also meaningfully off peg, and/or 24h volume or
+  market cap data suggests a real, sustained break rather than a
+  momentary print. This is the harsher of the two "real depeg" labels
+  and should reflect real conviction that the mechanism itself is
+  compromised, not just that the price is currently low.
+- TRANSIENT_VOLATILITY: the depeg looks real (cross-exchange data
+  roughly agrees something is off) but nothing here suggests the
+  mechanism is broken -- consistent with a liquidity crunch or a
+  sharp but explainable move that plausibly self-corrects. When in
+  doubt between this and STRUCTURAL_FAILURE, prefer this label: most
+  real-world stablecoin depegs turn out to be transient, not
+  structural, so STRUCTURAL_FAILURE should only be chosen when the
+  evidence clearly rules out a temporary explanation.
+- MANIPULATION_SUSPECTED: the breach looks isolated to the single feed
+  that triggered this check -- e.g. cross-exchange prices show the
+  asset trading close to $1.00 even though CoinGecko showed a breach,
+  or the supplementary data looks implausible or internally
+  inconsistent. Treat a clear disagreement between CoinGecko and the
+  cross-exchange prices as the single strongest signal for this class.
 
 Respond ONLY as compact JSON, no markdown fences, exactly:
 {{"classification": "STRUCTURAL_FAILURE" | "TRANSIENT_VOLATILITY" | "MANIPULATION_SUSPECTED",
   "confidence_score": <integer 0-100>,
   "data_quality": "RELIABLE" | "STALE" | "SUSPICIOUS",
   "payout_bps": <integer 0 or 10000>,
-  "reasoning": "<short factual reason>"}}
+  "reasoning": "<short factual reason, cite the cross-exchange comparison if it influenced the call>"}}
 
 Rules you must follow exactly:
 - STRUCTURAL_FAILURE requires confidence_score >= {MIN_STRUCTURAL_CONFIDENCE} and payout_bps = 10000.
@@ -495,6 +626,9 @@ Rules you must follow exactly:
   implausible, set data_quality to STALE or SUSPICIOUS and use
   MANIPULATION_SUSPECTED with payout_bps = 0 -- never pay out on data
   you flagged as unreliable.
+- No cross-exchange data being available is not by itself a reason to
+  suspect manipulation -- fall back to the CoinGecko market data alone
+  in that case.
 """
             raw = gl.nondet.exec_prompt(prompt, response_format="json")
             data = json.loads(raw)

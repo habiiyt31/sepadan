@@ -232,6 +232,10 @@ export const SUPPORTED_COINS = [
   { id: "usd-coin", label: "USDC — USD Coin" },
   { id: "dai", label: "DAI — Dai" },
   { id: "frax", label: "FRAX — Frax" },
+  { id: "first-digital-usd", label: "FDUSD — First Digital USD" },
+  { id: "paypal-usd", label: "PYUSD — PayPal USD" },
+  { id: "gho", label: "GHO — Aave GHO" },
+  { id: "ethena-usde", label: "USDe — Ethena USDe" },
 ];
 
 export function formatGen(wei: bigint): string {
