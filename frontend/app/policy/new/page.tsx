@@ -10,6 +10,7 @@ import {
   getPolicyCount,
   SUPPORTED_COINS,
 } from "@/lib/contract";
+import { DeviationGauge } from "@/components/DeviationGauge";
 
 export default function NewPolicyPage() {
   const router = useRouter();
@@ -51,20 +52,18 @@ export default function NewPolicyPage() {
     }
   }
 
-  const threshold = parseFloat(thresholdPct || "0");
-  const upperBound = (1 + threshold / 100).toFixed(4);
-  const lowerBound = (1 - threshold / 100).toFixed(4);
+  const thresholdBps = Math.round(parseFloat(thresholdPct || "0") * 100);
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Buy depeg cover</h1>
+        <h1 className="font-display text-2xl font-semibold italic tracking-tight">Buy depeg cover</h1>
         <p className="mt-1 text-sm text-ink-600">
           Payout triggers once validators confirm the price crossed your threshold.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="ledger space-y-5">
+      <form onSubmit={handleSubmit} className="panel space-y-5">
         <div>
           <label className="field-label" htmlFor="coin">Stablecoin</label>
           <select
@@ -110,14 +109,9 @@ export default function NewPolicyPage() {
           </div>
         </div>
 
-        {/* Live preview tied directly to the peg-line motif */}
-        {threshold > 0 && (
-          <div className="rounded-md border border-ink-700 bg-ink-800/40 px-4 py-3">
-            <div className="peg-line" />
-            <p className="mt-2 figure text-xs text-ink-600">
-              Pays out below <span className="text-alert-400">${lowerBound}</span> or above{" "}
-              <span className="text-alert-400">${upperBound}</span>
-            </p>
+        {thresholdBps > 0 && (
+          <div className="flex justify-center rounded-md border border-ink-700 bg-ink-800/40 px-4 py-3">
+            <DeviationGauge thresholdBps={thresholdBps} />
           </div>
         )}
 
@@ -152,7 +146,7 @@ export default function NewPolicyPage() {
           <p className="field-hint">Paid to the pool now, whether or not a depeg happens.</p>
         </div>
 
-        {error && <p className="text-sm text-alert-400">{error}</p>}
+        {error && <p className="text-sm text-brick-400">{error}</p>}
 
         <button type="submit" className="btn-primary w-full" disabled={busy}>
           {!address

@@ -6,43 +6,40 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          950: "#10131a",
-          900: "#161b26",
-          800: "#1f2635",
-          700: "#2a3345",
-          600: "#3a4459",
+          950: "#121316",
+          900: "#1a1c20",
+          800: "#24272c",
+          700: "#31353c",
+          600: "#43484f",
         },
-        brass: {
-          300: "#e8cf9b",
-          400: "#ddb968",
-          500: "#c9a24b",
-          600: "#a8843a",
+        verdigris: {
+          300: "#a8c9c0",
+          400: "#7bab9f",
+          500: "#5a9186",
+          600: "#48756c",
         },
-        peg: {
-          400: "#8fb2de",
-          500: "#6f9bd1",
-          600: "#5580b8",
+        seal: {
+          gold: "#b08d57",
+          "gold-light": "#cba876",
         },
-        alert: {
-          400: "#dc7a71",
-          500: "#cc5c52",
-          600: "#ab4941",
+        amber: {
+          400: "#d6a869",
+          500: "#c4934a",
         },
-        confirm: {
-          400: "#9ac295",
-          500: "#7fa87a",
-          600: "#658c60",
+        brick: {
+          400: "#c47870",
+          500: "#b1544a",
         },
-        parchment: "#e8e3d6",
+        sage: {
+          400: "#96b58a",
+          500: "#7c9b6f",
+        },
+        parchment: "#e4e1d6",
       },
       fontFamily: {
-        display: ["var(--font-display)", "ui-sans-serif", "sans-serif"],
+        display: ["var(--font-display)", "ui-serif", "serif"],
         sans: ["var(--font-body)", "ui-sans-serif", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
-      },
-      backgroundImage: {
-        "peg-line":
-          "linear-gradient(90deg, transparent, rgba(201,162,75,0.35) 15%, rgba(201,162,75,0.35) 85%, transparent)",
       },
     },
   },

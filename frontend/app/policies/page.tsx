@@ -33,28 +33,28 @@ export default function PoliciesPage() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Policies</h1>
+        <h1 className="font-display text-2xl font-semibold italic tracking-tight">Policies</h1>
         <Link href="/policy/new" className="btn-primary">Buy cover</Link>
       </div>
 
-      {loading && <div className="ledger text-center text-sm text-ink-600">Loading…</div>}
-      {error && <div className="ledger border-alert-500/40 text-center text-sm text-alert-400">{error}</div>}
+      {loading && <div className="panel text-center text-sm text-ink-600">Loading…</div>}
+      {error && <div className="panel border-brick-500/40 text-center text-sm text-brick-400">{error}</div>}
 
       {!loading && !error && rows.length === 0 && (
         <div className="void-state">
           <p>No policies yet.</p>
-          <Link href="/policy/new" className="text-brass-400 hover:text-brass-300">
+          <Link href="/policy/new" className="text-verdigris-400 hover:text-verdigris-300">
             Buy the first one →
           </Link>
         </div>
       )}
 
-      <div className="ledger p-0 sm:p-0">
+      <div className="panel p-0 sm:p-0">
         {rows.map((p) => (
           <Link
             key={p.id}
             href={`/policy/${p.id}`}
-            className="ledger-row px-5 transition hover:bg-ink-800/40 sm:px-6"
+            className="panel-row px-5 transition hover:bg-ink-800/40 sm:px-6"
           >
             <div>
               <p className="font-mono text-[11px] text-ink-700">#{p.id}</p>

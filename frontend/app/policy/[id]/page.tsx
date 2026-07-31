@@ -14,6 +14,8 @@ import {
 } from "@/lib/contract";
 import { StatusPill } from "@/components/StatusPill";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import { DeviationGauge } from "@/components/DeviationGauge";
+import { VerdictStamp } from "@/components/VerdictStamp";
 
 export default function PolicyDetailPage() {
   const params = useParams<{ id: string }>();
@@ -85,25 +87,20 @@ export default function PolicyDetailPage() {
     }
   }
 
-  if (loading) return <div className="ledger text-center text-sm text-ink-600">Loading policy…</div>;
-  if (error && !policy) return <div className="ledger border-alert-500/40 text-center text-sm text-alert-400">{error}</div>;
+  if (loading) return <div className="panel text-center text-sm text-ink-600">Loading policy…</div>;
+  if (error && !policy) return <div className="panel border-brick-500/40 text-center text-sm text-brick-400">{error}</div>;
   if (!policy) return null;
 
   const daysElapsed = currentDayCounter() - policy.start_day;
   const daysLeft = Math.max(0, policy.duration_days - daysElapsed);
   const isLastDay = policy.status === "active" && daysLeft === 0;
-  const upperBound = (1 + policy.threshold_bps / 10000).toFixed(4);
-  const lowerBound = (1 - policy.threshold_bps / 10000).toFixed(4);
 
-  // Derived from chain state, not from transient click state — this
-  // stays correct across reloads and page navigations, unlike a
-  // "last result" that only lived in React state.
   const lastCheckedPrice =
     policy.last_checked_day > 0 ? (policy.last_price_micros / 1_000_000).toFixed(6) : null;
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <div className="ledger space-y-5">
+      <div className="panel space-y-5">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -117,30 +114,34 @@ export default function PolicyDetailPage() {
           <StatusPill status={policy.status} />
         </div>
 
-        {/* Threshold band on the peg line */}
-        <div className="rounded-md border border-ink-700 bg-ink-800/40 px-4 py-3">
-          <div className="peg-line" />
-          <p className="mt-2 figure text-xs text-ink-600">
-            Covered outside <span className="text-alert-400">${lowerBound}</span>–
-            <span className="text-alert-400">${upperBound}</span>
-          </p>
+        {/* Radial threshold gauge, needle shows the last checked price */}
+        <div className="flex flex-col items-center rounded-md border border-ink-700 bg-ink-800/40 px-4 py-4">
+          <DeviationGauge
+            thresholdBps={policy.threshold_bps}
+            lastPriceMicros={policy.last_price_micros || undefined}
+          />
+          {lastCheckedPrice && (
+            <p className="mt-1 figure text-xs text-ink-600">
+              Last read: ${lastCheckedPrice} on day {policy.last_checked_day}
+            </p>
+          )}
         </div>
 
         {/* Core terms */}
         <div>
-          <div className="ledger-row">
+          <div className="panel-row">
             <span className="text-sm text-ink-600">Threshold</span>
             <span className="figure text-sm text-parchment">{(policy.threshold_bps / 100).toFixed(2)}%</span>
           </div>
-          <div className="ledger-row">
+          <div className="panel-row">
             <span className="text-sm text-ink-600">Payout amount</span>
             <span className="figure text-sm text-parchment">{formatGen(policy.payout_amount)} GEN</span>
           </div>
-          <div className="ledger-row">
+          <div className="panel-row">
             <span className="text-sm text-ink-600">Premium paid</span>
             <span className="figure text-sm text-parchment">{formatGen(policy.premium_paid)} GEN</span>
           </div>
-          <div className="ledger-row">
+          <div className="panel-row">
             <span className="text-sm text-ink-600">
               {policy.status === "active" ? "Days remaining" : "Duration"}
             </span>
@@ -152,41 +153,23 @@ export default function PolicyDetailPage() {
                 : `${policy.duration_days}d`}
             </span>
           </div>
-          <div className="ledger-row">
+          <div className="panel-row">
             <span className="text-sm text-ink-600">Buyer</span>
             <span className="figure truncate pl-4 text-xs text-ink-500">{policy.buyer}</span>
           </div>
         </div>
 
-        {/* Persistent last-check result — survives reloads because it
-            reads from chain state, not from a click that already happened. */}
-        {lastCheckedPrice && (
-          <div className="rounded-md border border-ink-700 bg-ink-800/40 px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wide text-ink-600">Last checked</p>
-            <p className="mt-0.5 figure text-sm text-parchment">
-              Day {policy.last_checked_day} — ${lastCheckedPrice}
-            </p>
-            {justChecked && policy.status === "active" && (
-              <p className="mt-1 text-xs text-peg-400">Still on peg, still covered.</p>
-            )}
-          </div>
+        {justChecked && policy.status === "active" && (
+          <p className="text-xs text-verdigris-400">Still on peg, still covered.</p>
         )}
 
         {policy.classification && (
-          <div className="rounded-md border border-ink-700 bg-ink-800/40 px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wide text-ink-600">AI classification</p>
-            <p className="mt-0.5 font-display text-sm font-semibold text-parchment">
-              {policy.classification}
-            </p>
-            {policy.resolved_note && (
-              <p className="mt-1 text-xs text-ink-600">{policy.resolved_note}</p>
-            )}
-          </div>
+          <VerdictStamp classification={policy.classification} reasoning={policy.resolved_note} />
         )}
 
         {/* Action area — one state at a time */}
         {policy.status === "active" && policy.consecutive_fetch_failures >= 3 && (
-          <div className="space-y-2.5 rounded-md border border-brass-500/30 bg-brass-500/5 px-4 py-3 text-sm text-brass-400">
+          <div className="space-y-2.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
             <p>
               {policy.consecutive_fetch_failures} consecutive price checks couldn't reach the
               feed.
@@ -198,12 +181,12 @@ export default function PolicyDetailPage() {
         )}
 
         {policy.status === "cooling" && (
-          <div className="space-y-2.5 rounded-md border border-brass-500/30 bg-brass-500/5 px-4 py-3">
+          <div className="space-y-2.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
             <p className="text-sm text-parchment">
               Flagged as possible manipulation. A second look is due on day{" "}
-              <span className="figure text-brass-400">{policy.cooling_until_day}</span>.
+              <span className="figure text-amber-400">{policy.cooling_until_day}</span>.
             </p>
-            {error && <p className="text-sm text-alert-400">{error}</p>}
+            {error && <p className="text-sm text-brick-400">{error}</p>}
             <button onClick={handleResolveCooling} disabled={checking} className="btn-primary w-full">
               {checking ? "Checking…" : "Resolve cooling period"}
             </button>
@@ -212,7 +195,7 @@ export default function PolicyDetailPage() {
 
         {policy.status === "active" && (
           <div className="space-y-2.5">
-            {error && <p className="text-sm text-alert-400">{error}</p>}
+            {error && <p className="text-sm text-brick-400">{error}</p>}
             {isLastDay && (
               <p className="text-xs text-ink-600">
                 Today is the last day this policy can trigger a payout — check it before it
@@ -228,7 +211,7 @@ export default function PolicyDetailPage() {
         )}
 
         {policy.status === "claimed" && (
-          <div className="rounded-md border border-confirm-500/30 bg-confirm-500/5 px-4 py-3 text-sm text-confirm-400">
+          <div className="rounded-md border border-sage-500/30 bg-sage-500/5 px-4 py-3 text-sm text-sage-400">
             Depeg confirmed by validators. Payout released.
           </div>
         )}
@@ -240,7 +223,7 @@ export default function PolicyDetailPage() {
         )}
       </div>
 
-      <div className="ledger">
+      <div className="panel">
         <h2 className="mb-3 font-display text-sm font-semibold text-parchment">History for this policy</h2>
         <ActivityFeed
           filterFn={(e) => e.functionName === "check_depeg" && Number(e.args[0]) === policyId}

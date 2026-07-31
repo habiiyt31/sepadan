@@ -79,21 +79,21 @@ export default function UnderwritePage() {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Underwrite the pool</h1>
+        <h1 className="font-display text-2xl font-semibold italic tracking-tight">Underwrite the pool</h1>
         <p className="mt-1 text-sm text-ink-600">
           Deposit GEN and earn shares. Withdraw whatever the pool isn't reserving for open policies.
         </p>
       </div>
 
       {pool && (
-        <div className="ledger">
+        <div className="panel">
           <PoolStats pool={pool} />
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <form onSubmit={handleDeposit} className="ledger space-y-4">
-          <h2 className="font-display text-sm font-semibold text-brass-400">Deposit</h2>
+        <form onSubmit={handleDeposit} className="panel space-y-4">
+          <h2 className="font-display text-sm font-semibold text-seal-gold">Deposit</h2>
           <div>
             <label className="field-label" htmlFor="deposit">Amount (GEN)</label>
             <input
@@ -115,8 +115,8 @@ export default function UnderwritePage() {
           </button>
         </form>
 
-        <form onSubmit={handleWithdraw} className="ledger space-y-4">
-          <h2 className="font-display text-sm font-semibold text-brass-400">Withdraw</h2>
+        <form onSubmit={handleWithdraw} className="panel space-y-4">
+          <h2 className="font-display text-sm font-semibold text-seal-gold">Withdraw</h2>
           <div>
             <label className="field-label" htmlFor="withdraw">Shares to burn</label>
             <input
@@ -141,12 +141,12 @@ export default function UnderwritePage() {
       </div>
 
       {error && (
-        <div className="ledger border-alert-500/40 bg-alert-500/5 text-sm text-alert-400">
+        <div className="panel border-brick-500/40 bg-brick-500/5 text-sm text-brick-400">
           {error}
         </div>
       )}
       {success && (
-        <div className="ledger border-confirm-500/40 bg-confirm-500/5 text-sm text-confirm-400">
+        <div className="panel border-sage-500/40 bg-sage-500/5 text-sm text-sage-400">
           {success}
         </div>
       )}

@@ -1,10 +1,10 @@
 import clsx from "clsx";
 
 const STYLES: Record<string, string> = {
-  active: "bg-peg-500/10 text-peg-400 border border-peg-500/40",
-  claimed: "bg-confirm-500/10 text-confirm-400 border border-confirm-500/40",
+  active: "bg-verdigris-500/10 text-verdigris-400 border border-verdigris-500/40",
+  claimed: "bg-sage-500/10 text-sage-400 border border-sage-500/40",
   expired: "bg-ink-800 text-ink-600 border border-ink-700",
-  cooling: "bg-brass-500/10 text-brass-400 border border-brass-500/40",
+  cooling: "bg-amber-500/10 text-amber-400 border border-amber-500/40",
   inactive: "bg-ink-800 text-ink-600 border border-ink-700",
 };
 

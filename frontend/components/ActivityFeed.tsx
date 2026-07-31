@@ -24,9 +24,9 @@ const STATUS_LABEL: Record<ActivityEntry["status"], string> = {
 };
 
 const STATUS_COLOR: Record<ActivityEntry["status"], string> = {
-  pending: "text-brass-400",
-  finalized: "text-confirm-400",
-  "pending-long": "text-brass-400",
+  pending: "text-amber-400",
+  finalized: "text-sage-400",
+  "pending-long": "text-amber-400",
 };
 
 export function ActivityFeed({ filterFn }: { filterFn?: (e: ActivityEntry) => boolean }) {
@@ -70,10 +70,10 @@ export function ActivityFeed({ filterFn }: { filterFn?: (e: ActivityEntry) => bo
           href={explorerTxUrl(e.hash)}
           target="_blank"
           rel="noreferrer"
-          className="ledger-row group transition hover:border-brass-500/30"
+          className="panel-row group transition hover:border-verdigris-500/30"
         >
           <div className="flex items-baseline gap-2">
-            <span className="font-mono text-xs text-parchment group-hover:text-brass-300">
+            <span className="font-mono text-xs text-parchment group-hover:text-verdigris-300">
               {e.functionName}
             </span>
             <span className="font-mono text-xs text-ink-600">{shortHash(e.hash)}</span>
