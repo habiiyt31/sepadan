@@ -31,6 +31,24 @@ export function getReadClient() {
   });
 }
 
+/**
+ * Normalizes a wallet-supplied address before it's ever sent to the
+ * RPC. Different wallets return `eth_accounts`/`eth_requestAccounts`
+ * results in different casing (lowercase, or EIP-55 checksummed), and
+ * the GenLayer Studio RPC has been observed rejecting some of those
+ * variants with "Invalid params: Incorrect address format" (a
+ * server-side -32602 error, not a viem client-side check). Lowercase
+ * hex is universally accepted by Ethereum-style JSON-RPC servers, so
+ * normalizing to it here removes the wallet/browser-dependent variance.
+ */
+function normalizeAddress(address: string): `0x${string}` {
+  const trimmed = (address ?? "").trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+    throw new Error(`Wallet returned an invalid address: "${address}"`);
+  }
+  return trimmed.toLowerCase() as `0x${string}`;
+}
+
 /** Write client bound to the connected MetaMask address. */
 export function getWriteClient(walletAddress: string) {
   if (typeof window === "undefined" || !window.ethereum) {
@@ -38,7 +56,7 @@ export function getWriteClient(walletAddress: string) {
   }
   return createClient({
     chain: resolveChain(),
-    account: walletAddress as any,
+    account: normalizeAddress(walletAddress),
     provider: window.ethereum,
   });
 }
