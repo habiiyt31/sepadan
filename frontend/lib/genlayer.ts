@@ -43,10 +43,84 @@ export function getWriteClient(walletAddress: string) {
   });
 }
 
-/** Ensures the connected wallet is on the configured GenLayer network. */
+/**
+ * Ensures the connected wallet is on the configured GenLayer network.
+ *
+ * IMPORTANT: this intentionally does NOT call genlayer-js's built-in
+ * `client.connect()`. That helper unconditionally calls the MetaMask
+ * Snaps RPC methods (`wallet_getSnaps` / `wallet_requestSnaps`) to
+ * install the GenLayer wallet-plugin snap -- something only real
+ * MetaMask supports. Any other EIP-1193 wallet (Rabby, OKX Wallet,
+ * Coinbase Wallet, Brave Wallet, etc.) throws "method [wallet_getSnaps]
+ * doesn't has corresponding handler" the moment connect() runs, which
+ * breaks every write/sign flow for those users.
+ *
+ * We don't need the snap here: `getWriteClient` already binds
+ * `account: walletAddress` + `provider: window.ethereum`, which is the
+ * documented "MetaMask handles signing" pattern -- genlayer-js proxies
+ * eth_sendTransaction/eth_signTransaction straight to the injected
+ * provider. Network correctness only requires the standard
+ * EIP-3085/3326 methods below, which every injected wallet implements.
+ */
 export async function ensureCorrectNetwork(walletAddress: string) {
   const client = getWriteClient(walletAddress);
-  await client.connect(NETWORK as "studionet" | "testnetBradbury");
+  const chain = resolveChain();
+  const provider = window.ethereum;
+  const expectedChainIdHex = `0x${chain.id.toString(16)}`;
+
+  // NOTE: this always runs, for every network including studionet.
+  // genlayer-js's own connect() does the exact same add+switch dance
+  // unconditionally (no isStudio bypass) -- the "skip for isStudio"
+  // logic that exists elsewhere in the SDK (assertChainMatch) is a
+  // *different* mechanism that only suppresses a warning message; it
+  // does not mean MetaMask can be left on whatever chain it happened
+  // to have selected. If we don't switch, eth_sendTransaction gets
+  // sent through the wallet's currently active network (e.g. Ethereum
+  // Mainnet) instead of GenLayer Studio -- which is exactly the wrong
+  // destination for the contract address we're calling.
+  try {
+    const currentChainId: string = await provider.request({ method: "eth_chainId" });
+
+    if (currentChainId !== expectedChainIdHex) {
+      try {
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: expectedChainIdHex }],
+        });
+      } catch (switchErr: any) {
+        // 4902 = chain not added to the wallet yet -- add then retry switch.
+        if (switchErr?.code === 4902) {
+          await provider.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: expectedChainIdHex,
+                chainName: chain.name,
+                rpcUrls: chain.rpcUrls.default.http,
+                nativeCurrency: chain.nativeCurrency,
+                blockExplorerUrls: chain.blockExplorers?.default?.url
+                  ? [chain.blockExplorers.default.url]
+                  : undefined,
+              },
+            ],
+          });
+          await provider.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: expectedChainIdHex }],
+          });
+        } else {
+          throw switchErr;
+        }
+      }
+    }
+  } catch (err: any) {
+    throw new Error(
+      `Please switch your wallet to ${chain.name} (chain ID ${chain.id}) and try again. (${
+        err?.message ?? err
+      })`
+    );
+  }
+
   return client;
 }
 
